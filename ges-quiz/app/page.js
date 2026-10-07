@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { courseKey } from "../lib/leaderboard";
-import { BRAND, TAGLINE } from "../lib/brand";
+import { BRAND, PARTNER, TAGLINE } from "../lib/brand";
 import { getPublishedQuizzes } from "../lib/data";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,7 @@ export default async function Home() {
       <header className="hero">
         <span className="pill">Free · No sign-up</span>
         <h1>{BRAND}</h1>
+       
         <p>{TAGLINE}</p>
       </header>
 
@@ -54,6 +55,8 @@ export default async function Home() {
                     </Link>
                   ))}
                 </div>
+
+                 
               </section>
             )}
 
@@ -72,6 +75,8 @@ export default async function Home() {
                     </span>
                   </Link>
                 ))}
+
+               
               </section>
             )}
           </>

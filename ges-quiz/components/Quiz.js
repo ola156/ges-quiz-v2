@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Board from './Board';
+import { PARTNER } from '../lib/brand';
 
 const LEVELS = ['100', '200', '300', '400', '500', '600'];
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
@@ -265,6 +266,8 @@ export default function Quiz({ quiz, questions, initialBoard }) {
         <p className="muted small">
           Questions and options are shuffled every time. You can retake as often as you like, and your newest score replaces your old one on the leaderboard.
         </p>
+
+        <h2>{PARTNER}</h2>
         {profile.username && profile.name && <p className="muted small">Playing as @{profile.username}</p>}
         <button className="btn" onClick={start}>Start quiz</button>
         <h2>Top scores in this set</h2>

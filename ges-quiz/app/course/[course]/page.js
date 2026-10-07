@@ -27,6 +27,7 @@ export default async function CoursePage({ params }) {
       <header className="hero">
         <span className="pill">{sets.length} {sets.length === 1 ? "set" : "sets"} · {totalQuestions} questions</span>
         <h1>{name}</h1>
+         
         <p>Pick a set to practise. Your newest score on each set is the one that counts on the leaderboard.</p>
       </header>
 
