@@ -10,6 +10,7 @@ const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 const SIX_HOURS = 6 * 3600;
 // Options like "All of the above" or "Both A and B" only make sense in their original order.
 const KEEP_ORDER = /\b(above|below)\b|\b(all|none) of (these|the)\b|\bboth\b|\bneither\b|^\s*\(?[a-e]\)?\s*(and|&|,)\s*\(?[a-e]\)?\b/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function shuffle(arr) {
   const a = [...arr];
@@ -31,16 +32,25 @@ function makePlan(questions) {
   return { qs: shuffle(questions.map((q) => q.id)), opts };
 }
 
+// Always a v4 UUID, because the server rejects anything else.
+function makeUuid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 function getClientId() {
   try {
     let id = localStorage.getItem('clientId');
-    if (!id) {
-      id = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now();
+    if (!id || !UUID_RE.test(id)) {
+      id = makeUuid();
       localStorage.setItem('clientId', id);
     }
     return id;
   } catch {
-    return 'anon-' + Math.random().toString(36).slice(2);
+    return makeUuid();
   }
 }
 

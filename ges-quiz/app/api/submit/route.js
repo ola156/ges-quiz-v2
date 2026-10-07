@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
-import { randomUUID } from 'crypto';
 import { db } from '../../../lib/supabase';
 import { getSetBoard, getSetRank, getCourseBoard, getCourseRank } from '../../../lib/leaderboard';
 import { readStart } from '../../../lib/token';
@@ -10,12 +9,15 @@ const sanitize = (u) => String(u || '').toLowerCase().replace(/[^a-z0-9_]/g, '')
 const digits = (n) => String(Math.floor(Math.random() * 10 ** n)).padStart(n, '0');
 const bad = (msg, status = 400) => NextResponse.json({ error: msg }, { status });
 const PROFILE_COLS = 'username, name, department, level';
+// Browsers make a v4 UUID. Anything else is rejected.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(req) {
   const body = await req.json();
   const { quizId, answers, profile = {} } = body;
   if (!quizId || !answers || typeof answers !== 'object') return bad('Bad request');
-  const clientId = clean(body.clientId, 100) || randomUUID();
+  const clientId = typeof body.clientId === 'string' ? body.clientId.trim().toLowerCase() : '';
+  if (!UUID_RE.test(clientId)) return bad('Invalid session. Reload the page and try again.');
 
   const supabase = db();
   const { data: quiz } = await supabase
