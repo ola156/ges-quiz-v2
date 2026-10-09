@@ -5,12 +5,14 @@ import { getSetBoard, getCourseBoard } from './leaderboard';
 // Cached reads, so opening a page does not wait on the database every time.
 // Admin changes clear 'quizzes' straight away, and every submission clears 'boards'.
 
+// Public list only. Private sets (listed = false) never appear here.
 export const getPublishedQuizzes = unstable_cache(
   async () => {
     const { data } = await db()
       .from('quizzes')
       .select('slug, title, course, description, time_limit_minutes, questions(count)')
       .eq('published', true)
+      .eq('listed', true)
       .order('created_at', { ascending: false });
     return data || [];
   },
@@ -18,19 +20,20 @@ export const getPublishedQuizzes = unstable_cache(
   { revalidate: 60, tags: ['quizzes'] },
 );
 
+// Works for public and private sets, because a private link is just its slug.
 // The answer column is never selected, so it is never sent to the browser.
 export const getQuizBySlug = unstable_cache(
   async (slug) => {
     const supabase = db();
     const { data: quiz } = await supabase
       .from('quizzes')
-      .select('id, title, course, description, time_limit_minutes')
+      .select('id, title, course, description, time_limit_minutes, listed, creators(name, post, agenda, photo_url, logo_url)')
       .eq('slug', slug)
       .eq('published', true)
       .maybeSingle();
     if (!quiz) return null;
     const { data: questions } = await supabase
-      .from('questions').select('id, text, options').eq('quiz_id', quiz.id).order('position');
+      .from('questions').select('id, text, options, image_url').eq('quiz_id', quiz.id).order('position');
     return { quiz, questions: questions || [] };
   },
   ['quiz-by-slug'],

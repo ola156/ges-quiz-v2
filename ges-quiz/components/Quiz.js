@@ -93,6 +93,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   const q = ordered[i];
   const last = i === ordered.length - 1;
   const courseHref = quiz.course ? `/leaderboard/${encodeURIComponent(quiz.course)}` : null;
+  const creator = quiz.creators || null;
 
   // Marks the quiz. Used by the form (first time) and automatically for returning players.
   async function submit(p) {
@@ -277,7 +278,23 @@ export default function Quiz({ quiz, questions, initialBoard }) {
           Questions and options are shuffled every time. You can retake as often as you like, and your newest score replaces your old one on the leaderboard.
         </p>
 
-        <h2>{PARTNER}</h2>
+        {creator && (
+          <div className="card presented">
+            <span className="presented-label">Presented by</span>
+            <div className="presented-head">
+              {creator.photo_url && <img className="presented-photo" src={creator.photo_url} alt={creator.name} />}
+              <div className="presented-who">
+                <strong>{creator.name}</strong>
+                {creator.post && <span className="muted small">{creator.post}</span>}
+              </div>
+              {creator.logo_url && <img className="presented-logo" src={creator.logo_url} alt="" />}
+            </div>
+            {creator.agenda && <p className="small presented-agenda">{creator.agenda}</p>}
+            <span className="muted small">This set was made by its creator. It is not part of the GES quizzes.</span>
+          </div>
+        )}
+
+        {!creator && <h2>{PARTNER}</h2>}
         {profile.username && profile.name && <p className="muted small">Playing as @{profile.username}</p>}
         <button className="btn" onClick={start}>Start quiz</button>
         <h2>Top scores in this set</h2>
@@ -296,6 +313,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
         </div>
         <div className="progress"><div style={{ width: `${((i + 1) / ordered.length) * 100}%` }} /></div>
         <h2 className="qtext">{q.text}</h2>
+        {q.image_url && <img className="qimg" src={q.image_url} alt="" />}
         <div className="stack tight">
           {order.map((orig, pos) => (
             <button
@@ -457,6 +475,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
           <div key={qq.id} className={`card review ${ok ? 'ok' : 'bad'}`}>
             <p className="meta">Question {n + 1}: {ok ? 'Correct' : r.chosen === null ? 'Not answered' : 'Wrong'}</p>
             <p className="qtext">{qq.text}</p>
+            {qq.image_url && <img className="qimg" src={qq.image_url} alt="" />}
             <p>Correct answer: <strong>{qq.options[r.correct]}</strong></p>
             {!ok && r.chosen !== null && <p className="muted">You picked: {qq.options[r.chosen]}</p>}
             {r.explanation && <p className="small">Why: {r.explanation}</p>}

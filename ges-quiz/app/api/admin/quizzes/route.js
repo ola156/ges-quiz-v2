@@ -14,16 +14,23 @@ const refresh = () => {
 const slugify = (s) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'quiz';
 
+// Private codes: 8 characters, no look-alikes (no 0/o, 1/l/i), easy to type from WhatsApp.
+const CODE_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789';
+const makeCode = () =>
+  Array.from({ length: 8 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+
 const toLimit = (v) => {
   const n = Number(v);
   return Number.isInteger(n) && n > 0 && n <= 300 ? n : null;
 };
 
+const toImage = (v) => (typeof v === 'string' && /^https:\/\//.test(v) && v.length < 600 ? v : null);
+
 export async function GET(req) {
   if (!isAdmin(req)) return deny();
   const { data: quizzes, error } = await db()
     .from('quizzes')
-    .select('id, slug, title, course, published, time_limit_minutes, created_at, questions(count), submissions(count)')
+    .select('id, slug, title, course, published, listed, time_limit_minutes, created_at, creators(name), questions(count), submissions(count)')
     .order('created_at', { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({
@@ -37,25 +44,35 @@ export async function GET(req) {
 
 export async function POST(req) {
   if (!isAdmin(req)) return deny();
-  const { title, course, description, timeLimit, questions } = await req.json();
+  const { title, course, description, timeLimit, questions, kind, creatorId } = await req.json();
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   if (!Array.isArray(questions) || !questions.length)
     return NextResponse.json({ error: 'No questions to save' }, { status: 400 });
 
+  const isPrivate = kind === 'private';
   const supabase = db();
-  const slug = `${slugify(title)}-${Math.random().toString(36).slice(2, 6)}`;
-  const { data: quiz, error } = await supabase
-    .from('quizzes')
-    .insert({
-      slug,
-      title: title.trim(),
-      course: course?.trim() || null,
-      description: description?.trim() || null,
-      time_limit_minutes: toLimit(timeLimit),
-    })
-    .select()
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const base = {
+    title: title.trim(),
+    description: description?.trim() || null,
+    time_limit_minutes: toLimit(timeLimit),
+    // A private set never joins a course, so its scores can never reach a public leaderboard.
+    course: isPrivate ? null : course?.trim() || null,
+    listed: !isPrivate,
+    creator_id: isPrivate && creatorId ? creatorId : null,
+  };
+
+  let quiz = null;
+  let lastError = null;
+  for (let tries = 0; tries < 6 && !quiz; tries++) {
+    // Private sets get a random code with no title in it. Public sets keep the readable slug.
+    const slug = isPrivate ? makeCode() : `${slugify(title)}-${Math.random().toString(36).slice(2, 6)}`;
+    const { data, error } = await supabase.from('quizzes').insert({ ...base, slug }).select().single();
+    if (!error) { quiz = data; break; }
+    lastError = error;
+    if (error.code !== '23505') break;
+  }
+  if (!quiz) return NextResponse.json({ error: lastError?.message || 'Could not save' }, { status: 500 });
 
   const rows = questions.map((q, i) => ({
     quiz_id: quiz.id,
@@ -64,6 +81,7 @@ export async function POST(req) {
     options: q.options,
     answer: q.answer,
     explanation: q.explanation,
+    image_url: toImage(q.image_url),
   }));
   const { error: qErr } = await supabase.from('questions').insert(rows);
   if (qErr) {
@@ -71,7 +89,7 @@ export async function POST(req) {
     return NextResponse.json({ error: qErr.message }, { status: 500 });
   }
   refresh();
-  return NextResponse.json({ slug: quiz.slug });
+  return NextResponse.json({ slug: quiz.slug, listed: quiz.listed });
 }
 
 export async function PATCH(req) {

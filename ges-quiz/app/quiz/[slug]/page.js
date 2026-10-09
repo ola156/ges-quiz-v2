@@ -9,7 +9,11 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }) {
   const { slug } = await params;
   const found = await getQuizBySlug(slug);
-  return { title: found ? `${found.quiz.title} | ${BRAND}` : 'Quiz' };
+  if (!found) return { title: 'Quiz' };
+  const meta = { title: `${found.quiz.title} | ${BRAND}` };
+  // Private sets must not show up in search engines.
+  if (!found.quiz.listed) meta.robots = { index: false, follow: false };
+  return meta;
 }
 
 export default async function QuizPage({ params }) {

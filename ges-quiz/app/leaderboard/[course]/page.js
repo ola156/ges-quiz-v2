@@ -15,7 +15,7 @@ export default async function CourseLeaderboard({ params }) {
   const [rows, depts, { data: all }] = await Promise.all([
     getCourseBoard(supabase, course, 50),
     getDeptBoard(supabase, course, 20),
-    supabase.from('quizzes').select('slug, title, course').eq('published', true).not('course', 'is', null),
+    supabase.from('quizzes').select('slug, title, course').eq('published', true).eq('listed', true).not('course', 'is', null),
   ]);
   const sets = (all || []).filter((q) => courseKey(q.course) === courseKey(course));
   const name = sets[0]?.course || course;
@@ -24,7 +24,7 @@ export default async function CourseLeaderboard({ params }) {
     <div className="stack">
       <Link href="/" className="back">Back to all quizzes</Link>
       <h1>{name} leaderboard</h1>
-      <p className="muted">Points are your first-attempt score in each set, added together. Finish more sets to climb.</p>
+      <p className="muted">Points are your newest score in each set, added together. Finish more sets to climb.</p>
       <Board rows={rows} overall />
       <h2>Department ranking</h2>
       <p className="muted small">Average percentage of each department's students. A department needs at least 3 students to appear.</p>
