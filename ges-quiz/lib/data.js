@@ -1,6 +1,6 @@
 import { unstable_cache } from 'next/cache';
 import { db } from './supabase';
-import { getSetBoard, getCourseBoard } from './leaderboard';
+import { getSetBoard, getCourseBoard, getDeptBoard } from './leaderboard';
 
 // Cached reads, so opening a page does not wait on the database every time.
 // Admin changes clear 'quizzes' straight away, and every submission clears 'boards'.
@@ -49,5 +49,18 @@ export const getSetBoardCached = unstable_cache(
 export const getCourseTopCached = unstable_cache(
   async (course) => getCourseBoard(db(), course, 3),
   ['course-top3'],
+  { revalidate: 30, tags: ['boards'] },
+);
+
+// Everyone who took part in a course, for the full leaderboard page.
+export const getCourseFullCached = unstable_cache(
+  async (course) => getCourseBoard(db(), course, Infinity),
+  ['course-full'],
+  { revalidate: 30, tags: ['boards'] },
+);
+
+export const getDeptBoardCached = unstable_cache(
+  async (course) => getDeptBoard(db(), course, 20),
+  ['course-depts'],
   { revalidate: 30, tags: ['boards'] },
 );

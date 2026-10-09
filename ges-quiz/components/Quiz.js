@@ -64,6 +64,131 @@ function savedProfile() {
   }
 }
 
+function pinIsSet() {
+  try {
+    return localStorage.getItem('pinSet') === '1';
+  } catch {
+    return false;
+  }
+}
+
+const postJson = (url, body) =>
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+// Lets a student protect their username with a 4-digit PIN, once.
+function PinCard({ onSaved }) {
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  async function save(e) {
+    e.preventDefault();
+    if (!/^\d{4}$/.test(pin)) {
+      setMsg('Enter exactly 4 digits.');
+      return;
+    }
+    setBusy(true);
+    setMsg('');
+    try {
+      const res = await postJson('/api/pin', { clientId: getClientId(), pin });
+      const data = await res.json();
+      if (res.ok || data.already) {
+        try { localStorage.setItem('pinSet', '1'); } catch {}
+        onSaved(Boolean(res.ok));
+        return;
+      }
+      setMsg(data.error || 'Could not save your PIN.');
+    } catch {
+      setMsg('No connection. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="card stack tight" onSubmit={save}>
+      <strong>Protect your username</strong>
+      <p className="muted small">
+        Set a 4-digit PIN. If you clear your browser or change phones, enter your username and PIN to get your name and scores back.
+      </p>
+      <input
+        type="tel"
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder="4-digit PIN"
+        maxLength={4}
+        value={pin}
+        onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+      />
+      {msg && <p className="error">{msg}</p>}
+      <button className="btn" disabled={busy}>{busy ? 'Saving...' : 'Save PIN'}</button>
+    </form>
+  );
+}
+
+// Brings back an old username on this device. Not a form, so it can sit inside the first-time form screen.
+function RestorePanel({ onRestored, onCancel }) {
+  const [username, setUsername] = useState('');
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  async function restore() {
+    if (!username.trim() || !/^\d{4}$/.test(pin)) {
+      setMsg('Enter your username and your 4-digit PIN.');
+      return;
+    }
+    setBusy(true);
+    setMsg('');
+    try {
+      const res = await postJson('/api/restore', { username, pin });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || 'Could not restore.');
+        return;
+      }
+      if (!UUID_RE.test(String(data.clientId))) {
+        setMsg('Could not restore. Contact the admin.');
+        return;
+      }
+      try {
+        localStorage.setItem('clientId', data.clientId);
+        localStorage.setItem('profile', JSON.stringify(data.profile));
+        localStorage.setItem('pinSet', '1');
+      } catch {}
+      onRestored(data.profile);
+    } catch {
+      setMsg('No connection. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const enter = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      restore();
+    }
+  };
+
+  return (
+    <div className="card stack tight">
+      <strong>Restore my username</strong>
+      <label>Username
+        <input autoCapitalize="none" autoCorrect="off" maxLength={20} value={username} onKeyDown={enter} onChange={(e) => setUsername(e.target.value)} />
+      </label>
+      <label>4-digit PIN
+        <input type="tel" inputMode="numeric" autoComplete="off" maxLength={4} value={pin} onKeyDown={enter} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} />
+      </label>
+      {msg && <p className="error">{msg}</p>}
+      <div className="row">
+        <button type="button" className="btn" disabled={busy} onClick={restore}>{busy ? 'Checking...' : 'Restore'}</button>
+        <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 export default function Quiz({ quiz, questions, initialBoard }) {
   const [step, setStep] = useState('intro'); // intro | quiz | saving | gate | result
   const [i, setI] = useState(0);
@@ -77,6 +202,9 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   const [error, setError] = useState('');
   const [timedOut, setTimedOut] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [pinSet, setPinSet] = useState(true); // starts true so the PIN card never flashes for people who already set one
+  const [pinFlash, setPinFlash] = useState('');
+  const [showRestore, setShowRestore] = useState(false);
 
   const limit = (quiz.time_limit_minutes || 0) * 60;
   const startRef = useRef(0);
@@ -150,6 +278,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
     booted.current = true;
     const p = savedProfile();
     if (p) setProfile((prev) => ({ ...prev, ...p }));
+    setPinSet(pinIsSet());
     try {
       const s = JSON.parse(localStorage.getItem(stateKey) || 'null');
       if (!s || !s.plan || !s.token) return;
@@ -229,6 +358,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
     setTimedOut(false);
     setLeft(limit);
     setError('');
+    setPinFlash('');
     setStep('quiz');
     window.scrollTo({ top: 0 });
     fetchToken(3);
@@ -255,12 +385,37 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   }
 
   function switchAccount() {
-    if (!confirm('Use a different name on this phone? You will fill in your details again.')) return;
+    const who = result?.username || profile.username;
+    const warning = pinSet
+      ? `Use a different name on this phone? You can get @${who} back later with your username and PIN.`
+      : `You have not set a PIN, so you will not be able to get @${who} back. Press Cancel to set a PIN first, or OK to continue.`;
+    if (!confirm(warning)) return;
     try {
       localStorage.removeItem('profile');
       localStorage.removeItem('clientId');
+      localStorage.removeItem('pinSet');
     } catch {}
     window.location.reload();
+  }
+
+  function onPinSaved(fresh) {
+    setPinSet(true);
+    setPinFlash(fresh ? 'PIN saved. Remember it, you need it to restore your username.' : 'A PIN is already set for this username.');
+  }
+
+  // Restored from the first-time form: the quiz is already finished, so mark it straight away.
+  function onRestoredAtGate(p) {
+    setShowRestore(false);
+    setProfile((prev) => ({ ...prev, ...p }));
+    setPinSet(true);
+    setStep('saving');
+    submit(p);
+  }
+
+  function onRestoredAtIntro(p) {
+    setShowRestore(false);
+    setProfile((prev) => ({ ...prev, ...p }));
+    setPinSet(true);
   }
 
   if (!questions.length) return <p className="muted">This quiz has no questions yet.</p>;
@@ -296,6 +451,14 @@ export default function Quiz({ quiz, questions, initialBoard }) {
 
         {!creator && <h2>{PARTNER}</h2>}
         {profile.username && profile.name && <p className="muted small">Playing as @{profile.username}</p>}
+        {!profile.username && !showRestore && (
+          <button type="button" className="btn ghost" onClick={() => setShowRestore(true)}>Played before? Restore my username</button>
+        )}
+        {!profile.username && showRestore && (
+          <RestorePanel onRestored={onRestoredAtIntro} onCancel={() => setShowRestore(false)} />
+        )}
+        {profile.username && !pinSet && <PinCard onSaved={onPinSaved} />}
+        {pinFlash && <p className="card small">{pinFlash}</p>}
         <button className="btn" onClick={start}>Start quiz</button>
         <h2>Top scores in this set</h2>
         <Board rows={initialBoard} />
@@ -351,6 +514,12 @@ export default function Quiz({ quiz, questions, initialBoard }) {
 
   if (step === 'gate')
     return (
+      <div className="stack">
+      {showRestore ? (
+        <RestorePanel onRestored={onRestoredAtGate} onCancel={() => setShowRestore(false)} />
+      ) : (
+        <button type="button" className="btn ghost" onClick={() => setShowRestore(true)}>Played before? Restore my username</button>
+      )}
       <form className="stack" onSubmit={onGate}>
         <h1>{timedOut ? 'Time is up' : 'Almost done'}</h1>
         <p className="muted">
@@ -388,6 +557,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
         {error && <p className="error">{error}</p>}
         <button className="btn" disabled={busy}>{busy ? 'Checking...' : 'See my score'}</button>
       </form>
+      </div>
     );
 
   // result
@@ -449,12 +619,13 @@ export default function Quiz({ quiz, questions, initialBoard }) {
         {result.counted && result.courseRank && <span className="meta">#{result.courseRank.rank} of {result.courseRank.total} in {quiz.course}</span>}
       </div>
       {note && <p className="card muted small">{note}</p>}
+      {!pinSet && <PinCard onSaved={onPinSaved} />}
+      {pinFlash && <p className="card small">{pinFlash}</p>}
 
       <button className="btn" onClick={shareImage} disabled={sharing}>{sharing ? 'Making your card...' : 'Share my score card'}</button>
       <a className="btn wa" target="_blank" rel="noreferrer" href={wa(challenge)}>
         {dept ? `Challenge My Score` : 'Challenge my department Score'}
       </a>
-    
 
       <h2>Top scores in this set</h2>
       <Board rows={result.setBoard} me={result.username} />

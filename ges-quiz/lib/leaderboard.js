@@ -1,24 +1,44 @@
+import { createHash } from 'crypto';
+
 export const courseKey = (c) => String(c || '').trim().toLowerCase();
 
+// user_key is the student's private device id. It must never reach the browser,
+// because anyone holding it could act as that student. The boards only get a one-way hash.
+const publicKey = (k) => createHash('sha256').update(String(k)).digest('hex').slice(0, 16);
+
 const fromSet = (r) => ({
-  key: r.user_key, username: r.username, department: r.department, level: r.level,
+  key: publicKey(r.user_key), username: r.username, department: r.department, level: r.level,
   points: r.score, possible: r.total, sets: 1, time: r.time_taken,
 });
 const fromCourse = (r) => ({
-  key: r.user_key, username: r.username, department: r.department, level: r.level,
+  key: publicKey(r.user_key), username: r.username, department: r.department, level: r.level,
   points: r.points, possible: r.possible, sets: r.sets_done, time: r.total_time,
 });
 
-// Highest in one set. Ties go to the faster finisher.
+// Supabase returns at most 1000 rows per request, so reading everyone means reading in pages.
+const PAGE = 1000;
+async function fetchAll(build) {
+  const out = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build().range(from, from + PAGE - 1);
+    if (error || !data) break;
+    out.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return out;
+}
+
+// Highest in one set. Ties go to the faster finisher. Pass limit = Infinity for everyone.
 export async function getSetBoard(supabase, quizId, limit = 10) {
-  const { data } = await supabase
+  const q = () => supabase
     .from('ranked_attempts')
     .select('user_key, username, department, level, score, total, time_taken')
     .eq('quiz_id', quizId)
     .order('score', { ascending: false })
     .order('time_taken', { ascending: true })
-    .limit(limit);
-  return (data || []).map(fromSet);
+    .order('user_key');
+  const rows = Number.isFinite(limit) ? (await q().limit(limit)).data : await fetchAll(q);
+  return (rows || []).map(fromSet);
 }
 
 export async function getSetRank(supabase, quizId, userKey) {
@@ -35,16 +55,17 @@ export async function getSetRank(supabase, quizId, userKey) {
   return { rank: (ahead || 0) + 1, total: total || 0 };
 }
 
-// Highest across all sets of a course.
+// Highest across all sets of a course. Pass limit = Infinity for everyone.
 export async function getCourseBoard(supabase, course, limit = 10) {
-  const { data } = await supabase
+  const q = () => supabase
     .from('course_board')
     .select('user_key, username, department, level, points, possible, sets_done, total_time')
     .eq('course_key', courseKey(course))
     .order('points', { ascending: false })
     .order('total_time', { ascending: true })
-    .limit(limit);
-  return (data || []).map(fromCourse);
+    .order('user_key');
+  const rows = Number.isFinite(limit) ? (await q().limit(limit)).data : await fetchAll(q);
+  return (rows || []).map(fromCourse);
 }
 
 export async function getCourseRank(supabase, course, userKey) {
@@ -68,9 +89,10 @@ export const MIN_DEPT = 3;
 const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
 export async function getDeptBoard(supabase, course, limit = 10) {
-  const { data } = await supabase
+  const data = await fetchAll(() => supabase
     .from('course_board').select('department, points, possible')
-    .eq('course_key', courseKey(course)).limit(5000);
+    .eq('course_key', courseKey(course))
+    .order('user_key'));
   const map = new Map();
   for (const r of data || []) {
     const k = String(r.department || '').trim().toLowerCase().replace(/\s+/g, ' ');
