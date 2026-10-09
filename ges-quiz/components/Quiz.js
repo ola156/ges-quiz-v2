@@ -205,6 +205,8 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   const [pinSet, setPinSet] = useState(true); // starts true so the PIN card never flashes for people who already set one
   const [pinFlash, setPinFlash] = useState('');
   const [showRestore, setShowRestore] = useState(false);
+   const creatorUrl = process.env.NEXT_PUBLIC_CREATOR_GROUP_URL || "";
+
 
   const limit = (quiz.time_limit_minutes || 0) * 60;
   const startRef = useRef(0);
@@ -449,7 +451,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
           </div>
         )}
 
-        {!creator && <h2>{PARTNER}</h2>}
+        <h2>{PARTNER}</h2>
         {profile.username && profile.name && <p className="muted small">Playing as @{profile.username}</p>}
         {!profile.username && !showRestore && (
           <button type="button" className="btn ghost" onClick={() => setShowRestore(true)}>Played before? Restore my username</button>
@@ -463,6 +465,14 @@ export default function Quiz({ quiz, questions, initialBoard }) {
         <h2>Top scores in this set</h2>
         <Board rows={initialBoard} />
         {courseHref && <Link href={courseHref}>See the {quiz.course} overall leaderboard</Link>}
+
+
+
+<div className="card creator">
+      <p className="muted">Want to turn your own department's lecture slides into interactive AI quizzes for your classmates? Tap here to join our early-access Creator Community.</p>
+      <a className="btn ghost" target="_blank" rel="noreferrer" href={creatorUrl}>Join the Creator Community</a>
+    </div>
+
       </section>
     );
 
