@@ -74,7 +74,7 @@ export const getCollectionByCode = unstable_cache(
     const supabase = db();
     const { data: col } = await supabase
       .from('collections')
-      .select('id, code, title, description, creators(name, post, agenda, photo_url, logo_url)')
+      .select('id, code, title, description, creators(name, post, agenda, photo_url, logo_url, code)')
       .eq('code', String(code || '').toLowerCase())
       .eq('published', true)
       .maybeSingle();
@@ -95,4 +95,47 @@ export const getCollectionBoardCached = unstable_cache(
   async (collectionId) => getCollectionBoard(db(), collectionId, Infinity),
   ['collection-board'],
   { revalidate: 30, tags: ['boards'] },
+);
+
+// A creator's page: their card, every published course (collection) and any loose private sets.
+export const getCreatorByCode = unstable_cache(
+  async (code) => {
+    const supabase = db();
+    const { data: creator } = await supabase
+      .from('creators')
+      .select('id, name, post, agenda, photo_url, logo_url, code')
+      .eq('code', String(code || '').toLowerCase())
+      .maybeSingle();
+    if (!creator) return null;
+
+    const { data: cols } = await supabase
+      .from('collections')
+      .select('code, title, description, created_at, quizzes(id, published, questions(count))')
+      .eq('creator_id', creator.id)
+      .eq('published', true)
+      .order('created_at', { ascending: true });
+    const courses = (cols || []).map((c) => {
+      const live = (c.quizzes || []).filter((q) => q.published);
+      return {
+        code: c.code,
+        title: c.title,
+        description: c.description,
+        sets: live.length,
+        questions: live.reduce((n, q) => n + (q.questions?.[0]?.count ?? 0), 0),
+      };
+    });
+
+    const { data: loose } = await supabase
+      .from('quizzes')
+      .select('slug, title, description, time_limit_minutes, questions(count)')
+      .eq('creator_id', creator.id)
+      .is('collection_id', null)
+      .eq('listed', false)
+      .eq('published', true)
+      .order('created_at', { ascending: true });
+
+    return { ...creator, courses, loose: loose || [] };
+  },
+  ['creator-by-code'],
+  { revalidate: 60, tags: ['quizzes', 'boards'] },
 );

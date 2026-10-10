@@ -7,7 +7,7 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 // Added to the AI prompt so powers, fractions and chemical formulas come out in a form the site can draw.
 const MATH_NOTE = '\n\nFor any maths, powers, fractions, roots, units or chemical formulas, write them in LaTeX between dollar signs, for example $x^2$, $\\frac{a}{b}$, $\\sqrt{x}$, $H_2O$, $5 \\times 10^{3}$, $m/s^2$, $30^\\circ$. Never use the dollar sign for money, write naira or N instead.';
 const EMPTY = { title: '', course: '', description: '', timeLimit: '', raw: '' };
-const EMPTY_CREATOR = { name: '', post: '', agenda: '', photo_url: '', logo_url: '' };
+const EMPTY_CREATOR = { name: '', code: '', post: '', agenda: '', photo_url: '', logo_url: '' };
 const EMPTY_COL = { code: '', title: '', description: '', creatorId: '' };
 // While typing a code word: lowercase, spaces become hyphens, other symbols are dropped.
 const typeCode = (v) => v.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -52,6 +52,7 @@ export default function Admin() {
   const [uploading, setUploading] = useState(null);
   const [newCreator, setNewCreator] = useState(EMPTY_CREATOR);
   const [creatorMsg, setCreatorMsg] = useState('');
+  const [creatorCodes, setCreatorCodes] = useState({}); // creator id -> code being typed
   const [colForm, setColForm] = useState(EMPTY_COL);
   const [colMsg, setColMsg] = useState('');
   const [colDone, setColDone] = useState(null);
@@ -203,6 +204,16 @@ export default function Admin() {
     loadCollections();
   }
 
+  async function saveCreatorCode(c) {
+    const code = creatorCodes[c.id] ?? c.code ?? '';
+    const res = await fetch('/api/admin/creators', { method: 'PATCH', headers, body: JSON.stringify({ id: c.id, code }) });
+    const data = await res.json();
+    if (!res.ok) return alert(data.error || 'Could not save the code word');
+    setCreatorCodes((prev) => { const n = { ...prev }; delete n[c.id]; return n; });
+    flash(data.code ? 'Code word saved' : 'Code word removed');
+    loadCreators();
+  }
+
   async function createCollection() {
     setColMsg('');
     setColDone(null);
@@ -347,6 +358,17 @@ export default function Admin() {
         <label>Name
           <input value={newCreator.name} onChange={(e) => setNewCreator({ ...newCreator, name: e.target.value })} />
         </label>
+        <label>Code word <span className="opt-tag">optional</span>
+          <input
+            value={newCreator.code}
+            maxLength={30}
+            autoCapitalize="none"
+            autoCorrect="off"
+            onChange={(e) => setNewCreator({ ...newCreator, code: typeCode(e.target.value) })}
+            placeholder="evo"
+          />
+          <span className="hint">One link and one code for all this creator's courses. Students type it in the code box. You can add it later in the Creators tab.</span>
+        </label>
         <label>Post being contested <span className="opt-tag">optional</span>
           <input value={newCreator.post} onChange={(e) => setNewCreator({ ...newCreator, post: e.target.value })} placeholder="Course rep, SUG President..." />
         </label>
@@ -432,6 +454,47 @@ export default function Admin() {
     );
   }
 
+  function renderCreator(c) {
+    const link = `${origin}/u/${c.code}`;
+    const typed = creatorCodes[c.id] ?? c.code ?? '';
+    const courseCount = collections.filter((x) => x.creator_id === c.id).length;
+    return (
+      <div key={c.id} className="card qitem">
+        <div className="qitem-top">
+          <strong className="qitem-title">{c.name}</strong>
+          <span className="badge private">CREATOR</span>
+        </div>
+        <div className="chips">
+          {c.post && <span className="chip">{c.post}</span>}
+          <span className="chip">{courseCount} {courseCount === 1 ? 'course' : 'courses'}</span>
+        </div>
+        {c.code ? (
+          <button type="button" className="code-pill" onClick={() => copy(c.code, 'Code copied')} title="Tap to copy the code word">
+            <span>Code</span><strong>{c.code}</strong>
+          </button>
+        ) : (
+          <p className="hint">No code word yet. Add one below so this creator gets one link for all their courses.</p>
+        )}
+        <label>Code word
+          <input
+            value={typed}
+            maxLength={30}
+            autoCapitalize="none"
+            autoCorrect="off"
+            onChange={(e) => setCreatorCodes({ ...creatorCodes, [c.id]: typeCode(e.target.value) })}
+            placeholder="evo"
+          />
+          <span className="hint">Changing it breaks links you already shared. Leave it empty to remove it.</span>
+        </label>
+        <div className="row actions">
+          <button type="button" className="btn sm" disabled={typed === (c.code || '')} onClick={() => saveCreatorCode(c)}>Save code word</button>
+          {c.code && <a className="btn sm ghost" href={`/u/${c.code}`} target="_blank" rel="noreferrer">Open</a>}
+          {c.code && <button type="button" className="btn sm ghost" onClick={() => copy(link, 'Link copied')}>Copy link</button>}
+        </div>
+      </div>
+    );
+  }
+
   function renderCollection(c) {
     const link = `${origin}/c/${c.code}`;
     const attempts = c.quizzes.reduce((n, q) => n + q.submissionCount, 0);
@@ -512,6 +575,9 @@ export default function Admin() {
         <button type="button" className={`seg-btn ${view === 'add' ? 'on' : ''}`} onClick={() => setView('add')}>Add a quiz</button>
         <button type="button" className={`seg-btn ${view === 'collections' ? 'on' : ''}`} onClick={() => setView('collections')}>
           Collections <span className="seg-count">{collections.length}</span>
+        </button>
+        <button type="button" className={`seg-btn ${view === 'creators' ? 'on' : ''}`} onClick={() => setView('creators')}>
+          Creators <span className="seg-count">{creators.length}</span>
         </button>
         <button type="button" className={`seg-btn ${view === 'manage' ? 'on' : ''}`} onClick={() => setView('manage')}>
           Manage <span className="seg-count">{counts.all}</span>
@@ -761,6 +827,24 @@ export default function Admin() {
 
           {!collections.length && <p className="muted">No collections yet.</p>}
           {collections.map((c) => renderCollection(c))}
+        </>
+      )}
+
+      {view === 'creators' && (
+        <>
+          <section className="card stack">
+            <h2 className="sec-title">Creator pages</h2>
+            <p className="hint">
+              Give a creator a code word and they get one page listing all their courses. Students open it with one link, or by typing the code word in the code box.
+              A course shows up on the page when you pick that creator on the collection.
+            </p>
+          </section>
+          {!creators.length && <p className="muted">No creators yet. Add the first one below.</p>}
+          {creators.map((c) => renderCreator(c))}
+          <section className="card stack">
+            <h2 className="sec-title">New creator</h2>
+            {creatorFold}
+          </section>
         </>
       )}
 
