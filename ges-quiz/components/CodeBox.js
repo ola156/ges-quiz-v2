@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-// Accepts the code, or a whole pasted link, and opens the private set.
+// Accepts a code word, a single-set code, or a whole pasted link, and opens the right page.
 export default function CodeBox() {
   const router = useRouter();
   const [code, setCode] = useState('');
@@ -11,20 +11,20 @@ export default function CodeBox() {
 
   async function go(e) {
     e.preventDefault();
-    const clean = code.trim().split('?')[0].split('/').filter(Boolean).pop() || '';
-    const c = clean.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const last = code.trim().split('?')[0].split('/').filter(Boolean).pop() || '';
+    const c = last.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, '');
     if (!c) return;
     setBusy(true);
     setError('');
     try {
-      const res = await fetch(`/api/private/${c}`);
+      const res = await fetch(`/api/resolve/${encodeURIComponent(c)}`);
       const data = await res.json();
       if (!data.ok) {
-        setError('We could not find a set with that code. Check it and try again.');
+        setError('We could not find anything with that code. Check it and try again.');
         setBusy(false);
         return;
       }
-      router.push(`/quiz/${c}`);
+      router.push(data.path);
     } catch {
       setError('Check your connection and try again.');
       setBusy(false);
@@ -41,10 +41,10 @@ export default function CodeBox() {
         autoCapitalize="none"
         autoCorrect="off"
         autoComplete="off"
-        aria-label="Private set code"
+        aria-label="Code"
       />
       {error && <p className="error small">{error}</p>}
-      <button className="btn" disabled={busy || !code.trim()}>{busy ? 'Opening...' : 'Open set'}</button>
+      <button className="btn" disabled={busy || !code.trim()}>{busy ? 'Opening...' : 'Open'}</button>
     </form>
   );
 }

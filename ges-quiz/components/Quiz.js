@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Board from './Board';
+import Rich from './Rich';
+import Calculator from './Calculator';
 import { PARTNER } from '../lib/brand';
 
 const LEVELS = ['100', '200', '300', '400', '500', '600'];
@@ -205,6 +207,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   const [pinSet, setPinSet] = useState(true); // starts true so the PIN card never flashes for people who already set one
   const [pinFlash, setPinFlash] = useState('');
   const [showRestore, setShowRestore] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
    const creatorUrl = process.env.NEXT_PUBLIC_CREATOR_GROUP_URL || "";
 
 
@@ -224,6 +227,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   const last = i === ordered.length - 1;
   const courseHref = quiz.course ? `/leaderboard/${encodeURIComponent(quiz.course)}` : null;
   const creator = quiz.creators || null;
+  const collection = quiz.collections || null;
 
   // Marks the quiz. Used by the form (first time) and automatically for returning players.
   async function submit(p) {
@@ -361,6 +365,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
     setLeft(limit);
     setError('');
     setPinFlash('');
+    setCalcOpen(false);
     setStep('quiz');
     window.scrollTo({ top: 0 });
     fetchToken(3);
@@ -465,14 +470,12 @@ export default function Quiz({ quiz, questions, initialBoard }) {
         <h2>Top scores in this set</h2>
         <Board rows={initialBoard} />
         {courseHref && <Link href={courseHref}>See the {quiz.course} overall leaderboard</Link>}
-
-
+        {collection && <Link href={`/c/${collection.code}`}>See all sets and the {collection.title} leaderboard</Link>}
 
 <div className="card creator">
       <p className="muted">Want to turn your own department's lecture slides into interactive AI quizzes for your classmates? Tap here to join our early-access Creator Community.</p>
       <a className="btn ghost" target="_blank" rel="noreferrer" href={creatorUrl}>Join the Creator Community</a>
     </div>
-
       </section>
     );
 
@@ -482,10 +485,22 @@ export default function Quiz({ quiz, questions, initialBoard }) {
       <section className="stack">
         <div className="row between">
           <p className="meta">Question {i + 1} of {ordered.length}</p>
-          {limit > 0 && <span className={`timer ${left <= 60 ? 'low' : ''}`}>{mmss(left)}</span>}
+          <div className="row">
+            {quiz.allow_calculator && (
+              <button type="button" className="btn sm ghost" aria-expanded={calcOpen} onClick={() => setCalcOpen((o) => !o)}>
+                {calcOpen ? 'Hide calculator' : 'Calculator'}
+              </button>
+            )}
+            {limit > 0 && <span className={`timer ${left <= 60 ? 'low' : ''}`}>{mmss(left)}</span>}
+          </div>
         </div>
         <div className="progress"><div style={{ width: `${((i + 1) / ordered.length) * 100}%` }} /></div>
-        <h2 className="qtext">{q.text}</h2>
+        {quiz.allow_calculator && (
+          <div style={{ display: calcOpen ? 'block' : 'none' }}>
+            <Calculator />
+          </div>
+        )}
+        <h2 className="qtext"><Rich text={q.text} /></h2>
         {q.image_url && <img className="qimg" src={q.image_url} alt="" />}
         <div className="stack tight">
           {order.map((orig, pos) => (
@@ -495,7 +510,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
               onClick={() => setAnswers({ ...answers, [q.id]: orig })}
             >
               <span className="letter">{LETTERS[pos]}</span>
-              <span>{q.options[orig]}</span>
+              <span><Rich text={q.options[orig]} /></span>
             </button>
           ))}
         </div>
@@ -648,6 +663,10 @@ export default function Quiz({ quiz, questions, initialBoard }) {
         </>
       )}
 
+      {collection && (
+        <Link href={`/c/${collection.code}`}>See the {collection.title} leaderboard and the other sets</Link>
+      )}
+
       <h2>Corrections</h2>
       {ordered.map((qq, n) => {
         const r = reviewById[qq.id];
@@ -655,11 +674,11 @@ export default function Quiz({ quiz, questions, initialBoard }) {
         return (
           <div key={qq.id} className={`card review ${ok ? 'ok' : 'bad'}`}>
             <p className="meta">Question {n + 1}: {ok ? 'Correct' : r.chosen === null ? 'Not answered' : 'Wrong'}</p>
-            <p className="qtext">{qq.text}</p>
+            <p className="qtext"><Rich text={qq.text} /></p>
             {qq.image_url && <img className="qimg" src={qq.image_url} alt="" />}
-            <p>Correct answer: <strong>{qq.options[r.correct]}</strong></p>
-            {!ok && r.chosen !== null && <p className="muted">You picked: {qq.options[r.chosen]}</p>}
-            {r.explanation && <p className="small">Why: {r.explanation}</p>}
+            <p>Correct answer: <strong><Rich text={qq.options[r.correct]} /></strong></p>
+            {!ok && r.chosen !== null && <p className="muted">You picked: <Rich text={qq.options[r.chosen]} /></p>}
+            {r.explanation && <p className="small">Why: <Rich text={r.explanation} /></p>}
           </div>
         );
       })}

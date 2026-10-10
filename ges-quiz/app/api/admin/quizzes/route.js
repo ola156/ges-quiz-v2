@@ -30,7 +30,7 @@ export async function GET(req) {
   if (!isAdmin(req)) return deny();
   const { data: quizzes, error } = await db()
     .from('quizzes')
-    .select('id, slug, title, course, published, listed, time_limit_minutes, created_at, creators(name), questions(count), submissions(count)')
+    .select('id, slug, title, course, published, listed, allow_calculator, collection_id, time_limit_minutes, created_at, creators(name), collections(code, title), questions(count), submissions(count)')
     .order('created_at', { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({
@@ -44,7 +44,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   if (!isAdmin(req)) return deny();
-  const { title, course, description, timeLimit, questions, kind, creatorId } = await req.json();
+  const { title, course, description, timeLimit, questions, kind, creatorId, collectionId, allowCalculator } = await req.json();
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   if (!Array.isArray(questions) || !questions.length)
     return NextResponse.json({ error: 'No questions to save' }, { status: 400 });
@@ -52,14 +52,25 @@ export async function POST(req) {
   const isPrivate = kind === 'private';
   const supabase = db();
 
+  // A set can join a collection only if it is private, and the collection must exist.
+  let collection = null;
+  if (isPrivate && collectionId) {
+    const { data } = await supabase.from('collections').select('id, code, title').eq('id', collectionId).maybeSingle();
+    if (!data) return NextResponse.json({ error: 'That collection no longer exists' }, { status: 400 });
+    collection = data;
+  }
+
   const base = {
     title: title.trim(),
     description: description?.trim() || null,
     time_limit_minutes: toLimit(timeLimit),
+    allow_calculator: Boolean(allowCalculator),
     // A private set never joins a course, so its scores can never reach a public leaderboard.
     course: isPrivate ? null : course?.trim() || null,
     listed: !isPrivate,
-    creator_id: isPrivate && creatorId ? creatorId : null,
+    // In a collection, the creator card comes from the collection itself.
+    creator_id: isPrivate && !collection && creatorId ? creatorId : null,
+    collection_id: collection ? collection.id : null,
   };
 
   let quiz = null;
@@ -89,16 +100,33 @@ export async function POST(req) {
     return NextResponse.json({ error: qErr.message }, { status: 500 });
   }
   refresh();
-  return NextResponse.json({ slug: quiz.slug, listed: quiz.listed });
+  return NextResponse.json({
+    slug: quiz.slug,
+    listed: quiz.listed,
+    collection: collection ? { code: collection.code, title: collection.title } : null,
+  });
 }
 
 export async function PATCH(req) {
   if (!isAdmin(req)) return deny();
   const body = await req.json();
+  const supabase = db();
   const update = {};
   if ('published' in body) update.published = Boolean(body.published);
   if ('time_limit_minutes' in body) update.time_limit_minutes = toLimit(body.time_limit_minutes);
-  const { error } = await db().from('quizzes').update(update).eq('id', body.id);
+  if ('allow_calculator' in body) update.allow_calculator = Boolean(body.allow_calculator);
+  if ('collection_id' in body) {
+    if (body.collection_id) {
+      const { data: cur } = await supabase.from('quizzes').select('listed').eq('id', body.id).maybeSingle();
+      if (!cur || cur.listed) return NextResponse.json({ error: 'Only private sets can join a collection.' }, { status: 400 });
+      const { data: col } = await supabase.from('collections').select('id').eq('id', body.collection_id).maybeSingle();
+      if (!col) return NextResponse.json({ error: 'That collection no longer exists' }, { status: 400 });
+      update.collection_id = col.id;
+    } else {
+      update.collection_id = null;
+    }
+  }
+  const { error } = await supabase.from('quizzes').update(update).eq('id', body.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   refresh();
   return NextResponse.json({ ok: true });

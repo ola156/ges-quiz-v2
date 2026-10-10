@@ -22,10 +22,13 @@ export default async function QuizPage({ params }) {
   if (!found) notFound();
 
   const initialBoard = await getSetBoardCached(found.quiz.id);
+  const col = found.quiz.collections;
 
   return (
     <>
-      <Link href="/" className="back">Back to all quizzes</Link>
+      <Link href={col ? `/c/${col.code}` : '/'} className="back">
+        {col ? `Back to ${col.title}` : 'Back to all quizzes'}
+      </Link>
       <Quiz quiz={found.quiz} questions={found.questions} initialBoard={initialBoard} />
     </>
   );

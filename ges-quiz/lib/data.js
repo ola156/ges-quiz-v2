@@ -1,6 +1,6 @@
 import { unstable_cache } from 'next/cache';
 import { db } from './supabase';
-import { getSetBoard, getCourseBoard, getDeptBoard } from './leaderboard';
+import { getSetBoard, getCourseBoard, getDeptBoard, getCollectionBoard } from './leaderboard';
 
 // Cached reads, so opening a page does not wait on the database every time.
 // Admin changes clear 'quizzes' straight away, and every submission clears 'boards'.
@@ -27,11 +27,14 @@ export const getQuizBySlug = unstable_cache(
     const supabase = db();
     const { data: quiz } = await supabase
       .from('quizzes')
-      .select('id, title, course, description, time_limit_minutes, listed, creators(name, post, agenda, photo_url, logo_url)')
+      .select('id, title, course, description, time_limit_minutes, listed, allow_calculator, creators(name, post, agenda, photo_url, logo_url), collections(code, title, creators(name, post, agenda, photo_url, logo_url))')
       .eq('slug', slug)
       .eq('published', true)
       .maybeSingle();
     if (!quiz) return null;
+    // A set inside a collection shows the collection's creator card, unless it has its own.
+    if (!quiz.creators && quiz.collections?.creators) quiz.creators = quiz.collections.creators;
+    quiz.collections = quiz.collections ? { code: quiz.collections.code, title: quiz.collections.title } : null;
     const { data: questions } = await supabase
       .from('questions').select('id, text, options, image_url').eq('quiz_id', quiz.id).order('position');
     return { quiz, questions: questions || [] };
@@ -62,5 +65,34 @@ export const getCourseFullCached = unstable_cache(
 export const getDeptBoardCached = unstable_cache(
   async (course) => getDeptBoard(db(), course, 20),
   ['course-depts'],
+  { revalidate: 30, tags: ['boards'] },
+);
+
+// One subject: its details, creator card and sets. Found by the code word.
+export const getCollectionByCode = unstable_cache(
+  async (code) => {
+    const supabase = db();
+    const { data: col } = await supabase
+      .from('collections')
+      .select('id, code, title, description, creators(name, post, agenda, photo_url, logo_url)')
+      .eq('code', String(code || '').toLowerCase())
+      .eq('published', true)
+      .maybeSingle();
+    if (!col) return null;
+    const { data: sets } = await supabase
+      .from('quizzes')
+      .select('slug, title, description, time_limit_minutes, questions(count), submissions(count)')
+      .eq('collection_id', col.id)
+      .eq('published', true)
+      .order('created_at', { ascending: true });
+    return { ...col, sets: sets || [] };
+  },
+  ['collection-by-code'],
+  { revalidate: 60, tags: ['quizzes', 'boards'] },
+);
+
+export const getCollectionBoardCached = unstable_cache(
+  async (collectionId) => getCollectionBoard(db(), collectionId, Infinity),
+  ['collection-board'],
   { revalidate: 30, tags: ['boards'] },
 );

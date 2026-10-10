@@ -51,8 +51,8 @@ export default async function Home({ searchParams }) {
       {isPrivate ? (
         <div className="stack">
           <section className="card stack tight">
-            <h2 className="private">Have a private code?</h2>
-            <p className="muted small">Type the code you were given, or paste the link, to open your set.</p>
+            <h2 className="private">Have a code?</h2>
+            <p className="muted small">Type the code word you were given, or paste the link, to open your subject or set.</p>
             <CodeBox />
           </section>
 

@@ -68,6 +68,19 @@ export async function getCourseBoard(supabase, course, limit = 10) {
   return (rows || []).map(fromCourse);
 }
 
+// Highest across all sets of one collection. Pass limit = Infinity for everyone.
+export async function getCollectionBoard(supabase, collectionId, limit = 10) {
+  const q = () => supabase
+    .from('collection_board')
+    .select('user_key, username, department, level, points, possible, sets_done, total_time')
+    .eq('collection_id', collectionId)
+    .order('points', { ascending: false })
+    .order('total_time', { ascending: true })
+    .order('user_key');
+  const rows = Number.isFinite(limit) ? (await q().limit(limit)).data : await fetchAll(q);
+  return (rows || []).map(fromCourse);
+}
+
 export async function getCourseRank(supabase, course, userKey) {
   const ck = courseKey(course);
   const { data: me } = await supabase
