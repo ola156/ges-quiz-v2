@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { parseQuestions, AI_PROMPT } from '../../lib/parse';
 import Rich from '../../components/Rich';
 import AdminStudy from '../../components/AdminStudy';
+import AdminStudents from '../../components/AdminStudents';
 import NavFrame from '../../components/NavFrame';
 import ThemeToggle from '../../components/ThemeToggle';
 
@@ -18,6 +19,8 @@ const ADMIN_CSS = `
 .adm-stats em { font-style: normal; color: var(--muted); font-size: 0.8rem; }
 @media (max-width: 860px) { .adm-wrap .toast { bottom: 84px; } }
 `;
+// Creators are hidden for now. The code, routes and data stay, so switching this on brings them back.
+const SHOW_CREATORS = false;
 const EMPTY = { title: '', course: '', description: '', timeLimit: '', raw: '' };
 const EMPTY_CREATOR = { name: '', code: '', post: '', agenda: '', photo_url: '', logo_url: '' };
 const EMPTY_COL = { code: '', title: '', description: '', creatorId: '' };
@@ -51,7 +54,7 @@ async function shrink(file, { max = 1200, png = false } = {}) {
 export default function Admin() {
   const [pw, setPw] = useState('');
   const [authed, setAuthed] = useState(false);
-  const [view, setView] = useState('overview'); // overview | add | collections | creators | tutors | manage
+  const [view, setView] = useState('overview'); // overview | add | manage | newcollection | collections | newlesson | study | students | tutors
   const [quizzes, setQuizzes] = useState([]);
   const [creators, setCreators] = useState([]);
   const [tutors, setTutors] = useState([]);
@@ -375,7 +378,7 @@ export default function Admin() {
   const canCreateCollection = colForm.code.replace(/-/g, '').length >= 3 && colForm.title.trim();
 
   // The "add a new creator" form is used both in the quiz form and in the collection form.
-  const creatorFold = (
+  const creatorFold = !SHOW_CREATORS ? null : (
     <details className="fold">
       <summary>+ Add a new creator</summary>
       <div className="stack tight fold-body">
@@ -574,12 +577,14 @@ export default function Admin() {
             <label>Description <span className="opt-tag">optional</span>
               <input value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
             </label>
+            {SHOW_CREATORS && (
             <label>Creator card <span className="opt-tag">optional</span>
               <select value={editForm.creatorId} onChange={(e) => setEditForm({ ...editForm, creatorId: e.target.value })}>
                 <option value="">No creator card</option>
                 {creators.map((x) => <option key={x.id} value={x.id}>{x.name}{x.post ? `, ${x.post}` : ''}</option>)}
               </select>
             </label>
+            )}
             {colMsg && <p className="error small">{colMsg}</p>}
             <div className="row">
               <button type="button" className="btn sm" onClick={saveEdit}>Save changes</button>
@@ -595,10 +600,10 @@ export default function Admin() {
   const NAV = [
     { id: 'overview', label: 'Dashboard', icon: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z' },
     { id: 'add', label: 'Add a quiz', icon: 'M12 5v14 M5 12h14' },
-    { id: 'manage', label: 'Manage', icon: 'M4 6h16 M4 12h16 M4 18h16', count: counts.all },
+    { id: 'manage', label: 'Quizzes', icon: 'M4 6h16 M4 12h16 M4 18h16', count: counts.all },
     { id: 'collections', label: 'Collections', icon: 'M3 7l9-4 9 4-9 4-9-4z M3 12l9 4 9-4 M3 17l9 4 9-4', count: collections.length },
-    { id: 'creators', label: 'Creators', icon: 'M12 12a4 4 0 100-8 4 4 0 000 8z M4 21c0-4 4-6 8-6s8 2 8 6', count: creators.length },
-    { id: 'study', label: 'Study', icon: 'M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z M4 21V5 M9 7h6' },
+    { id: 'study', label: 'Study content', icon: 'M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z M4 21V5 M9 7h6' },
+    { id: 'students', label: 'Students', icon: 'M12 12a4 4 0 100-8 4 4 0 000 8z M4 21c0-4 4-6 8-6s8 2 8 6' },
     { id: 'tutors', label: 'Tutors', icon: 'M12 3l10 5-10 5L2 8z M6 10.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-5.5', count: waiting.length || undefined, alert: waiting.length > 0 },
   ];
   const go = (id) => {
@@ -606,7 +611,7 @@ export default function Admin() {
     if (id === 'tutors') loadTutors();
     window.scrollTo({ top: 0 });
   };
-  const title = NAV.find((n) => n.id === view)?.label || 'Admin';
+  const title = view === 'newcollection' ? 'New collection' : view === 'newlesson' ? 'Add a lesson' : NAV.find((n) => n.id === view)?.label || 'Admin';
   const topQuizzes = [...quizzes].sort((x, y) => (y.submissionCount || 0) - (x.submissionCount || 0)).slice(0, 5);
   const icon = (d) => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
@@ -615,7 +620,7 @@ export default function Admin() {
   return (
     <NavFrame
       items={NAV}
-      current={view}
+      current={view === 'newcollection' ? 'collections' : view === 'newlesson' ? 'study' : view}
       onSelect={go}
       brand={<div className="nf-brand">Instrict <span>Quizmate</span><small>Admin</small></div>}
       tools={<ThemeToggle />}
@@ -634,7 +639,7 @@ export default function Admin() {
           <div className="adm-stats">
             <div className="card"><span>Quizzes</span><strong>{counts.all}</strong><em>{counts.public} public, {counts.private} private</em></div>
             <div className="card"><span>Attempts</span><strong>{counts.attempts}</strong><em>across all quizzes</em></div>
-            <div className="card"><span>Collections</span><strong>{collections.length}</strong><em>{creators.length} creators</em></div>
+            <div className="card"><span>Collections</span><strong>{collections.length}</strong><em>{collections.filter((c) => c.published).length} shown</em></div>
             <div className="card"><span>Tutors</span><strong>{tutors.length}</strong><em>{tutors.filter((t) => t.active).length} active, {waiting.length} not active</em></div>
           </div>
 
@@ -642,7 +647,8 @@ export default function Admin() {
             <h2 className="sec-title">Quick actions</h2>
             <div className="row">
               <button type="button" className="btn sm" onClick={() => go('add')}>Add a quiz</button>
-              <button type="button" className="btn sm ghost" onClick={() => go('collections')}>New collection</button>
+              <button type="button" className="btn sm ghost" onClick={() => go('newcollection')}>New collection</button>
+              <button type="button" className="btn sm ghost" onClick={() => go('newlesson')}>Add a lesson</button>
               <button type="button" className="btn sm ghost" onClick={() => go('manage')}>All quizzes</button>
               <button type="button" className="btn sm ghost" onClick={() => go('tutors')}>Tutors</button>
             </div>
@@ -789,11 +795,10 @@ export default function Admin() {
                 </label>
 
                 {chosenCollection ? (
-                  <p className="hint">
-                    The creator card comes from the collection{chosenCollection.creators?.name ? `: ${chosenCollection.creators.name}` : ''}.
-                  </p>
+                  <p className="hint">This set is part of the collection and opens with its code word.</p>
                 ) : (
                   <>
+                    {SHOW_CREATORS && (
                     <label>Creator card <span className="opt-tag">optional</span>
                       <select value={creatorId} onChange={(e) => setCreatorId(e.target.value)}>
                         <option value="">No creator card</option>
@@ -801,8 +806,9 @@ export default function Admin() {
                       </select>
                       <span className="hint">Shown to students as "Presented by" above Start quiz.</span>
                     </label>
+                    )}
 
-                    {chosenCreator && (
+                    {SHOW_CREATORS && chosenCreator && (
                       <div className="creator-pick">
                         {chosenCreator.photo_url
                           ? <img className="thumb round" src={chosenCreator.photo_url} alt="" />
@@ -884,7 +890,7 @@ export default function Admin() {
         </>
       )}
 
-      {view === 'collections' && (
+      {view === 'newcollection' && (
         <>
           {colDone && (
             <div className="card done stack tight">
@@ -896,6 +902,7 @@ export default function Admin() {
               <div className="row">
                 <button className="btn sm" onClick={() => copy(`${origin}/c/${colDone.code}`, 'Link copied')}>Copy link</button>
                 <button className="btn sm ghost" onClick={() => { setView('add'); setKind('private'); setColDone(null); window.scrollTo({ top: 0 }); }}>Add a set to it</button>
+                <button className="btn sm ghost" onClick={() => go('collections')}>View collections</button>
                 <button className="btn sm ghost" onClick={() => setColDone(null)}>Dismiss</button>
               </div>
             </div>
@@ -925,6 +932,7 @@ export default function Admin() {
             <label>Description <span className="opt-tag">optional</span>
               <input value={colForm.description} onChange={(e) => setColForm({ ...colForm, description: e.target.value })} placeholder="Chapters 1 to 6 for the first test" />
             </label>
+            {SHOW_CREATORS && (
             <label>Creator card <span className="opt-tag">optional</span>
               <select value={colForm.creatorId} onChange={(e) => setColForm({ ...colForm, creatorId: e.target.value })}>
                 <option value="">No creator card</option>
@@ -932,11 +940,20 @@ export default function Admin() {
               </select>
               <span className="hint">Shown to students as "Presented by" on the collection page and on each set.</span>
             </label>
+            )}
             {creatorFold}
             {colMsg && !editId && <p className="error small">{colMsg}</p>}
             <button type="button" className="btn" disabled={!canCreateCollection} onClick={createCollection}>Create collection</button>
           </section>
+        </>
+      )}
 
+      {view === 'collections' && (
+        <>
+          <div className="row between">
+            <span className="muted small">{collections.length} {collections.length === 1 ? 'collection' : 'collections'}</span>
+            <button type="button" className="btn sm" onClick={() => go('newcollection')}>New collection</button>
+          </div>
           {!collections.length && <p className="muted">No collections yet.</p>}
           {collections.map((c) => renderCollection(c))}
         </>
@@ -960,7 +977,11 @@ export default function Admin() {
         </>
       )}
 
-      {view === 'study' && <AdminStudy pw={pw} flash={flash} />}
+      {(view === 'study' || view === 'newlesson') && (
+        <AdminStudy pw={pw} flash={flash} mode={view === 'study' ? 'list' : 'form'} onMode={(m) => go(m === 'form' ? 'newlesson' : 'study')} />
+      )}
+
+      {view === 'students' && <AdminStudents pw={pw} flash={flash} />}
 
       {view === 'tutors' && (
         <>

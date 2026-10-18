@@ -12,7 +12,8 @@ const LEVELS = [
 const levelName = (id) => LEVELS.find((l) => l.id === id)?.label || id;
 const EMPTY = { exam: 'jamb', school: '', subjectId: '', subjectName: '', subjectBlurb: '', topicId: '', topicTitle: '', title: '', content: '', subtopicId: '' };
 
-export default function AdminStudy({ pw, flash }) {
+// mode 'form' is where lessons are written. mode 'list' shows what has been made. Kept apart on purpose.
+export default function AdminStudy({ pw, flash, mode, onMode }) {
   const [subjects, setSubjects] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [f, setF] = useState(EMPTY);
@@ -60,7 +61,7 @@ export default function AdminStudy({ pw, flash }) {
       topicId: t.id, topicTitle: '', title: sub.title, subtopicId: sub.id,
       content: serializeStudy(sub.cards, sub.questions),
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    onMode('form');
   }
 
   async function remove(kind, id, label) {
@@ -71,8 +72,13 @@ export default function AdminStudy({ pw, flash }) {
   const ready = f.title.trim() && f.content.trim() && parsed && !parsed.errors.length
     && (f.subjectId || f.subjectName.trim()) && (f.topicId || f.topicTitle.trim());
 
-  return (
-    <>
+  if (mode === 'form') {
+    return (
+      <>
+        <div className="row between">
+          <span className="muted small">{subjects.length} {subjects.length === 1 ? 'subject' : 'subjects'} so far</span>
+          <button type="button" className="btn sm ghost" onClick={() => onMode('list')}>View study content</button>
+        </div>
       <section className="card stack">
         <h2 className="sec-title">{f.subtopicId ? 'Edit lesson' : 'Add a lesson'}</h2>
         <p className="hint">A lesson is a few study cards and a short quiz. Pick the level, then the subject and topic.</p>
@@ -149,6 +155,17 @@ export default function AdminStudy({ pw, flash }) {
           </div>
         )}
       </section>
+
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="row between">
+        <span className="muted small">{subjects.reduce((n, x) => n + x.topics.reduce((m, t) => m + t.subtopics.length, 0), 0)} lessons</span>
+        <button type="button" className="btn sm" onClick={() => { setF({ ...EMPTY }); onMode('form'); }}>New lesson</button>
+      </div>
 
       {loaded && !hasChem && (
         <section className="card stack tight">

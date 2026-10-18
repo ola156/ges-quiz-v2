@@ -55,13 +55,19 @@ export default function ExamResults({ examId, title, track }) {
 
   const subjectNames = useMemo(() => (rows ? [...new Set(rows.flatMap((r) => Object.keys(r.subjects || {})))] : []), [rows]);
   const jamb = track === 'jamb' && subjectNames.length > 0;
-  const outOf = 100 * subjectNames.length;
+  // Students can pick their own subjects, so each student has their own number of subjects.
+  const countOf = (r) => Object.keys(r.subjects || {}).length;
+  const counts = useMemo(() => new Set((rows || []).map(countOf)), [rows]);
+  const mixed = jamb && counts.size > 1;
+  const outOf = 100 * (counts.size ? Math.max(...counts) : subjectNames.length);
 
   // One number per student: the JAMB score for JAMB exams, otherwise the percentage.
+  // When students took different numbers of subjects, class figures use the percentage of their own total.
   const data = useMemo(() => (rows || []).map((r) => {
     const jt = jamb ? jambTotal(r.subjects, subjectNames) : null;
-    return { ...r, main: jamb ? jt : r.percent, jt };
-  }), [rows, jamb, subjectNames]);
+    const rowOut = jamb ? 100 * countOf(r) : null;
+    return { ...r, main: jamb ? (mixed ? Math.round((jt / (rowOut || 1)) * 100) : jt) : r.percent, jt, rowOut };
+  }), [rows, jamb, mixed, subjectNames]);
 
   const list = useMemo(() => {
     const f = find.trim().toLowerCase();
@@ -76,7 +82,7 @@ export default function ExamResults({ examId, title, track }) {
     if (!data.length) return null;
     const mains = data.map((r) => r.main);
     const avg = mains.reduce((n, v) => n + v, 0) / mains.length;
-    const passLine = jamb ? outOf / 2 : 50;
+    const passLine = jamb && !mixed ? outOf / 2 : 50;
     const times = data.map((r) => r.time).filter((t) => t || t === 0);
     return {
       avg: Math.round(avg),
@@ -85,15 +91,15 @@ export default function ExamResults({ examId, title, track }) {
       pass: Math.round((mains.filter((v) => v >= passLine).length / mains.length) * 100),
       time: times.length ? Math.round(times.reduce((n, v) => n + v, 0) / times.length) : null,
     };
-  }, [data, jamb, outOf]);
+  }, [data, jamb, mixed, outOf]);
 
   const subjectAvg = useMemo(() => subjectNames.map((n) => {
     const got = data.filter((r) => r.subjects?.[n]?.[1]);
     const pct = got.length ? Math.round(got.reduce((s, r) => s + (r.subjects[n][0] / r.subjects[n][1]) * 100, 0) / got.length) : 0;
-    return { name: n, pct };
+    return { name: n, pct, n: got.length };
   }), [data, subjectNames]);
 
-  const fmt = (v) => (jamb ? `${v}/${outOf}` : `${v}%`);
+  const fmt = (v) => (jamb && !mixed ? `${v}/${outOf}` : `${v}%`);
 
   return (
     <section className="stack">
@@ -110,13 +116,16 @@ export default function ExamResults({ examId, title, track }) {
         <>
           <div className="rs-stats">
             <div><span>Students</span><strong>{data.length}</strong><em>handed in</em></div>
-            <div><span>Average</span><strong>{fmt(stats.avg)}</strong><em>{jamb ? 'JAMB score' : 'class score'}</em></div>
+            <div><span>Average</span><strong>{fmt(stats.avg)}</strong><em>{jamb && !mixed ? 'JAMB score' : 'class score'}</em></div>
             <div><span>Highest</span><strong>{fmt(stats.hi)}</strong><em>lowest {fmt(stats.lo)}</em></div>
-            <div><span>Passed</span><strong>{stats.pass}%</strong><em>{jamb ? `${outOf / 2} and above` : '50% and above'}</em></div>
+            <div><span>Passed</span><strong>{stats.pass}%</strong><em>{jamb && !mixed ? `${outOf / 2} and above` : '50% and above'}</em></div>
             {stats.time !== null && <div><span>Average time</span><strong>{mmss(stats.time)}</strong><em>minutes</em></div>}
           </div>
-          {jamb && subjectNames.length !== 4 && (
-            <p className="muted small">JAMB scores add each subject out of 100. This exam has {subjectNames.length} {subjectNames.length === 1 ? 'subject' : 'subjects'}, so the total is out of {outOf}. Four subjects give the usual 400.</p>
+          {mixed && (
+            <p className="muted small">Students took different numbers of subjects, so each JAMB score is out of that student's own total (100 per subject) and the class figures above are percentages.</p>
+          )}
+          {jamb && !mixed && subjectNames.length !== 4 && (
+            <p className="muted small">JAMB scores add each subject out of 100. Students took {subjectNames.length} {subjectNames.length === 1 ? 'subject' : 'subjects'}, so the total is out of {outOf}. Four subjects give the usual 400.</p>
           )}
 
           {subjectAvg.length > 1 && (
@@ -125,7 +134,7 @@ export default function ExamResults({ examId, title, track }) {
               <div className="rs-sub">
                 {subjectAvg.map((s) => (
                   <div key={s.name} className="rs-sub-row">
-                    <span>{s.name || 'Subject'}</span>
+                    <span>{s.name || 'Subject'}<small className="muted"> ({s.n})</small></span>
                     <div className="rs-track" role="img" aria-label={`${s.name} ${s.pct}%`}><i style={{ width: `${s.pct}%` }} /></div>
                     <strong>{s.pct}%</strong>
                   </div>
@@ -150,16 +159,16 @@ export default function ExamResults({ examId, title, track }) {
                   <span className="rs-name">{r.name}{extra ? <small>{extra}</small> : null}</span>
                   <span className="rs-score">
                     {jamb ? `${r.jt}` : `${r.percent}%`}
-                    <small>{jamb ? `out of ${outOf}` : `${r.score}/${r.total}`}</small>
+                    <small>{jamb ? `out of ${r.rowOut}` : `${r.score}/${r.total}`}</small>
                   </span>
-                  {subjectNames.length > 1 && (
+                  {countOf(r) > 0 && subjectNames.length > 1 && (
                     <div className="rs-chips">
-                      {subjectNames.map((n) => {
+                      {subjectNames.filter((n) => r.subjects?.[n]).map((n) => {
                         const s = r.subjects?.[n];
                         const pct = s && s[1] ? Math.round((s[0] / s[1]) * 100) : null;
                         return (
                           <span key={n}>
-                            {n || 'Subject'}: {s ? `${s[0]}/${s[1]}` : 'none'}{pct !== null && track === 'waec' ? ` (${waecGrade(pct)})` : jamb && pct !== null ? ` (${pct})` : ''}
+                            {n || 'Subject'}: {`${s[0]}/${s[1]}`}{pct !== null && track === 'waec' ? ` (${waecGrade(pct)})` : jamb && pct !== null ? ` (${pct})` : ''}
                           </span>
                         );
                       })}

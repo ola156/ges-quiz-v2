@@ -5,6 +5,7 @@ import Board from './Board';
 import Rich from './Rich';
 import Calculator from './Calculator';
 import { PARTNER } from '../lib/brand';
+import { examMinutes } from '../lib/exam';
 
 const LEVELS = ['100', '200', '300', '400', '500', '600'];
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
@@ -81,6 +82,26 @@ function pinIsSet() {
     return false;
   }
 }
+
+// Styles for the "choose your subjects" step.
+const PICK_CSS = `
+.qp-pick { margin: 0; padding: 0; border: 0; min-width: 0; display: grid; gap: 8px; }
+.qp-pick legend { padding: 0; font-weight: 700; font-size: 1.05rem; color: var(--head); }
+.qp-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--surface-line); }
+.qp-list li { border-bottom: 1px solid var(--surface-line); }
+.qp-row { display: flex; align-items: center; gap: 14px; padding: 14px 4px; cursor: pointer; color: var(--on-dark); font-weight: 400; }
+.qp-row:hover { background: var(--wash); }
+.qp-row.on { background: var(--wash); }
+.qp-row.off { opacity: 0.45; cursor: not-allowed; }
+.qp-row input[type='checkbox'] { flex: none; width: 22px; height: 22px; padding: 0; accent-color: var(--blue); }
+.qp-name { flex: 1; min-width: 0; font-weight: 600; color: var(--head); }
+.qp-name small { display: block; margin-top: 2px; font-weight: 400; font-size: 0.85rem; color: var(--on-dark-muted); }
+.qp-row em { font-style: normal; font-size: 0.75rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; background: var(--wash-strong); color: var(--on-dark); }
+.qp-count { color: var(--on-dark-muted); font-size: 0.85rem; }
+`;
+
+// Subjects named on the questions, in order. With "students pick their subjects" on, `picked` holds the ticked ones.
+const subjectNames = (qs) => [...new Set(qs.map((x) => x.subject).filter(Boolean))];
 
 const postJson = (url, body) =>
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -217,12 +238,18 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   const [showRestore, setShowRestore] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
   const station = Boolean(quiz.station);
+  const canPick = Boolean(station && quiz.pick_subjects && subjectNames(questions).length > 1);
+  // null means every subject. With the picker on it is the list the student ticked (compulsory ones start ticked).
+  const [picked, setPicked] = useState(() => (canPick ? subjectNames(questions).filter((n) => quiz.subject_config?.[n]?.required) : null));
+  const pickedRef = useRef(picked);
+  pickedRef.current = picked;
+  const active = picked ? questions.filter((x) => picked.includes(x.subject)) : questions;
   const attemptRef = useRef('');
   const keyRef = useRef(null); // set while a question is on screen, so the keyboard shortcuts know where we are
    const creatorUrl = process.env.NEXT_PUBLIC_CREATOR_GROUP_URL || "";
 
 
-  const limit = (quiz.time_limit_minutes || 0) * 60;
+  const limit = examMinutes(quiz, picked) * 60;
   const startRef = useRef(0);
   const booted = useRef(false);
   const answersRef = useRef({});
@@ -236,7 +263,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   // so tutor exams keep it only for the life of the tab.
   const keep = () => (station ? window.sessionStorage : window.localStorage);
   const byId = Object.fromEntries(questions.map((qq) => [qq.id, qq]));
-  const ordered = plan ? plan.qs.map((id) => byId[id]) : questions;
+  const ordered = plan ? plan.qs.map((id) => byId[id]) : active;
   const q = ordered[i];
   const last = i === ordered.length - 1;
   const courseHref = quiz.course ? `/leaderboard/${encodeURIComponent(quiz.course)}` : null;
@@ -255,6 +282,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
           quizId: quiz.id,
           answers: answersRef.current,
           profile: p,
+          subjects: pickedRef.current,
           clientId: station ? attemptRef.current || (attemptRef.current = makeUuid()) : getClientId(),
           token: tokenRef.current,
         }),
@@ -313,8 +341,11 @@ export default function Quiz({ quiz, questions, initialBoard }) {
       const s = JSON.parse(keep().getItem(stateKey) || 'null');
       if (!s || !s.plan || !s.token) return;
       const age = (Date.now() - s.startedAt) / 1000;
+      const sp = canPick && Array.isArray(s.picked) ? s.picked.filter((n) => subjectNames(questions).includes(n)) : null;
+      const act = sp ? questions.filter((x) => sp.includes(x.subject)) : questions;
+      const lim = examMinutes(quiz, sp) * 60;
       const planOk =
-        s.plan.qs.length === questions.length &&
+        s.plan.qs.length === act.length &&
         s.plan.qs.every((id) => byId[id]) &&
         Object.entries(s.plan.opts).every(([id, o]) => byId[id] && byId[id].options.length === o.length);
       if (!planOk || age > SIX_HOURS) {
@@ -325,23 +356,25 @@ export default function Quiz({ quiz, questions, initialBoard }) {
         attemptRef.current = s.attemptId || '';
         if (s.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
       }
+      pickedRef.current = sp;
+      setPicked(sp);
       startRef.current = s.startedAt;
       answersRef.current = s.answers || {};
       tokenRef.current = s.token;
       setPlan(s.plan);
       setToken(s.token);
       setAnswers(s.answers || {});
-      setI(Math.min(s.i || 0, questions.length - 1));
+      setI(Math.min(s.i || 0, act.length - 1));
       if (s.phase === 'gate') {
         if (station) {
           setStep('gate');
           return;
         }
         goToScore(Boolean(s.timedOut));
-      } else if (limit && age >= limit) {
+      } else if (lim && age >= lim) {
         goToScore(true);
       } else {
-        setLeft(limit ? Math.max(0, limit - Math.floor(age)) : 0);
+        setLeft(lim ? Math.max(0, lim - Math.floor(age)) : 0);
         setStep('quiz');
       }
     } catch {}
@@ -353,11 +386,11 @@ export default function Quiz({ quiz, questions, initialBoard }) {
     try {
       keep().setItem(stateKey, JSON.stringify({
         phase: step === 'quiz' ? 'quiz' : 'gate',
-        startedAt: startRef.current, token, plan, answers, i, timedOut,
+        startedAt: startRef.current, token, plan, answers, i, timedOut, picked,
         ...(station ? { attemptId: attemptRef.current, profile: { name: profile.name, department: profile.department, level: profile.level } } : {}),
       }));
     } catch {}
-  }, [step, answers, i, token, plan, timedOut]);
+  }, [step, answers, i, token, plan, timedOut, picked]);
 
   // Department suggestions are only needed when the first-time form is on screen.
   useEffect(() => {
@@ -399,7 +432,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
     attemptRef.current = station ? makeUuid() : '';
     tokenRef.current = '';
     answersRef.current = {};
-    setPlan(makePlan(questions));
+    setPlan(makePlan(active));
     setToken('');
     setAnswers({});
     setI(0);
@@ -485,16 +518,27 @@ export default function Quiz({ quiz, questions, initialBoard }) {
       if (found) found.n += 1;
       else subjects.push({ name: k, n: 1 });
     }
-    const ready = profile.name.trim() && (!quiz.ask_department || profile.department.trim()) && (!quiz.ask_level || profile.level);
+    const cfg = quiz.subject_config || {};
+    const maxPick = quiz.max_subjects || 0;
+    const count = picked ? picked.length : subjects.length;
+    const enough = !canPick || (count >= 1 && (!maxPick || count <= maxPick));
+    const mins = examMinutes(quiz, picked);
+    const anyRequired = subjects.some((x) => cfg[x.name]?.required);
+    const toggle = (n) => {
+      if (cfg[n]?.required) return;
+      setPicked((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n]));
+    };
+    const ready = profile.name.trim() && (!quiz.ask_department || profile.department.trim()) && (!quiz.ask_level || profile.level) && enough;
     return (
       <form className="stack" onSubmit={(e) => { e.preventDefault(); if (ready) start(); }}>
+        <style>{PICK_CSS}</style>
         <h1>{quiz.title}</h1>
         {quiz.host && <p className="muted">{quiz.host}</p>}
         {quiz.description && <p>{quiz.description}</p>}
         <p className="meta">
-          {questions.length} questions{quiz.time_limit_minutes ? `, ${quiz.time_limit_minutes} minutes in total` : ''}
+          {active.length} questions{mins ? `, ${mins} minutes in total` : ''}
         </p>
-        {subjects.length > 1 && (
+        {!canPick && subjects.length > 1 && (
           <div className="chips">
             {subjects.map((x) => <span key={x.name} className="chip">{x.name}: {x.n}</span>)}
           </div>
@@ -516,8 +560,36 @@ export default function Quiz({ quiz, questions, initialBoard }) {
             </select>
           </label>
         )}
+        {canPick && (
+          <fieldset className="qp-pick">
+            <legend>Choose your subjects</legend>
+            <p className="muted small">
+              {maxPick ? `Pick up to ${maxPick} subjects.` : 'Tick every subject you are writing.'}
+              {anyRequired ? ' A subject marked Compulsory is already ticked for you.' : ''}
+            </p>
+            <ul className="qp-list">
+              {subjects.map((x) => {
+                const on = picked.includes(x.name);
+                const req = Boolean(cfg[x.name]?.required);
+                const full = !on && maxPick > 0 && picked.length >= maxPick;
+                const m = !quiz.time_limit_minutes && cfg[x.name]?.minutes ? `, ${cfg[x.name].minutes} min` : '';
+                return (
+                  <li key={x.name}>
+                    <label className={`qp-row ${on ? 'on' : ''} ${full ? 'off' : ''}`}>
+                      <input type="checkbox" checked={on} disabled={req || full} onChange={() => toggle(x.name)} />
+                      <span className="qp-name">{x.name}<small>{x.n} questions{m}</small></span>
+                      {req && <em>Compulsory</em>}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="qp-count">{maxPick ? `${picked.length} of ${maxPick} picked` : `${picked.length} picked`}</p>
+          </fieldset>
+        )}
         <p className="muted small">The timer starts when you press Start. Questions and options are shuffled.</p>
         <button className="btn" disabled={!ready}>Start</button>
+        {canPick && !enough && <p className="muted small">Pick at least one subject to start.</p>}
       </form>
     );
   }
@@ -933,7 +1005,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
           </div>
         );
       })}
-      <Link className="btn ghost" href="/browse">Try another set</Link>
+      <Link className="btn ghost" href="/practice">Try another set</Link>
       <button className="btn ghost" onClick={switchAccount}>Not @{result.username}? Use a different name</button>
     </section>
   );

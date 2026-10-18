@@ -3,7 +3,7 @@ import { revalidateTag } from 'next/cache';
 import { db } from '../../../lib/supabase';
 import { getSetBoard, getSetRank, getCourseBoard, getCourseRank } from '../../../lib/leaderboard';
 import { readStart } from '../../../lib/token';
-import { examState } from '../../../lib/exam';
+import { examState, examMinutes } from '../../../lib/exam';
 
 const clean = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
 const sanitize = (u) => String(u || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
@@ -23,13 +23,28 @@ export async function POST(req) {
   const supabase = db();
   const { data: quiz } = await supabase
     .from('quizzes')
-    .select('id, course, time_limit_minutes, tutor_id, opens_at, closes_at, show_score, ask_department, ask_level')
+    .select('id, course, time_limit_minutes, tutor_id, opens_at, closes_at, show_score, ask_department, ask_level, pick_subjects, max_subjects, subject_config')
     .eq('id', quizId).maybeSingle();
   if (!quiz) return bad('Quiz not found', 404);
 
-  const { data: questions } = await supabase
+  const { data: all } = await supabase
     .from('questions').select('id, answer, explanation, subject').eq('quiz_id', quizId).order('position');
-  if (!questions?.length) return bad('Quiz not found', 404);
+  if (!all?.length) return bad('Quiz not found', 404);
+
+  // Some tutor exams let each student pick their subjects. Only those subjects are marked.
+  // Compulsory subjects are always included, and the tutor's limit on how many can be picked is enforced here.
+  let questions = all;
+  let chosen = null;
+  const names = [...new Set(all.map((q) => q.subject).filter(Boolean))];
+  if (quiz.tutor_id && quiz.pick_subjects && names.length > 1) {
+    const sent = Array.isArray(body.subjects) ? body.subjects.filter((s) => typeof s === 'string') : [];
+    const set = new Set(sent.filter((s) => names.includes(s)));
+    for (const n of names) if (quiz.subject_config?.[n]?.required) set.add(n);
+    if (!set.size) return bad('Pick at least one subject.');
+    if (quiz.max_subjects && set.size > quiz.max_subjects) return bad(`You can pick at most ${quiz.max_subjects} subjects.`);
+    chosen = names.filter((n) => set.has(n));
+    questions = all.filter((q) => set.has(q.subject));
+  }
 
   // A tutor can close an exam. Someone who started while it was open may still finish and hand in.
   const startedAt = readStart(body.token, quizId);
@@ -68,7 +83,7 @@ export async function POST(req) {
     if (quiz.ask_department && !department) return bad('Enter your department.');
     if (quiz.ask_level && !level) return bad('Enter your level.');
 
-    const limit = quiz.time_limit_minutes ? quiz.time_limit_minutes * 60 : 0;
+    const limit = examMinutes(quiz, chosen) * 60;
     let taken = null;
     let isLate = true;
     if (startedAt) {
@@ -140,7 +155,7 @@ export async function POST(req) {
 
   // Time is measured by the server from the signed start token, not by the browser.
   // No valid token, or finishing well after the limit, means the attempt is not ranked.
-  const limitSec = quiz.time_limit_minutes ? quiz.time_limit_minutes * 60 : 0;
+  const limitSec = examMinutes(quiz, chosen) * 60;
   let time = null;
   let late = true;
   let lateReason = 'no-start';

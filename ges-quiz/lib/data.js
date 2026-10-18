@@ -27,7 +27,7 @@ export const getQuizBySlug = unstable_cache(
     const supabase = db();
     const { data: quiz } = await supabase
       .from('quizzes')
-      .select('id, title, course, description, time_limit_minutes, listed, allow_calculator, tutor_id, opens_at, closes_at, show_score, ask_department, ask_level, creators(name, post, agenda, photo_url, logo_url), collections(code, title, creators(name, post, agenda, photo_url, logo_url))')
+      .select('id, title, course, description, time_limit_minutes, listed, allow_calculator, tutor_id, opens_at, closes_at, show_score, ask_department, ask_level, pick_subjects, max_subjects, subject_config, creators(name, post, agenda, photo_url, logo_url), collections(code, title, creators(name, post, agenda, photo_url, logo_url))')
       .eq('slug', slug)
       .eq('published', true)
       .maybeSingle();

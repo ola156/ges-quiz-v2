@@ -19,7 +19,7 @@ export default async function ExamPage({ params }) {
   const supabase = db();
   const { data: exam } = await supabase
     .from('quizzes')
-    .select('id, slug, title, description, time_limit_minutes, opens_at, closes_at, show_score, ask_department, ask_level, allow_calculator, track, school')
+    .select('id, slug, title, description, time_limit_minutes, opens_at, closes_at, show_score, ask_department, ask_level, allow_calculator, track, school, pick_subjects, max_subjects, subject_config')
     .eq('id', id).eq('tutor_id', userId).maybeSingle();
   if (!exam) notFound();
 
@@ -28,18 +28,20 @@ export default async function ExamPage({ params }) {
     supabase.from('submissions').select('id', { count: 'exact', head: true }).eq('quiz_id', id),
   ]);
 
-  // Group the saved questions back into their subjects, in order.
+  // Group the saved questions back into their subjects, in order. Each subject remembers
+  // whether it is compulsory and how many minutes it has.
+  const cfg = exam.subject_config || {};
   const subjects = [];
   for (const q of qs || []) {
     const name = q.subject || '';
     let s = subjects.find((x) => x.name === name);
     if (!s) {
-      s = { k: subjects.length + 1000, name, questions: [], paste: '', pasteMsg: '' };
+      s = { k: subjects.length + 1000, name, questions: [], paste: '', pasteMsg: '', required: Boolean(cfg[name]?.required), minutes: cfg[name]?.minutes ? String(cfg[name].minutes) : '' };
       subjects.push(s);
     }
     s.questions.push({ k: s.k * 1000 + s.questions.length, id: q.id, text: q.text, options: q.options, answer: q.answer, explanation: q.explanation || '' });
   }
-  if (!subjects.length) subjects.push({ k: 1000, name: '', questions: [], paste: '', pasteMsg: '' });
+  if (!subjects.length) subjects.push({ k: 1000, name: '', questions: [], paste: '', pasteMsg: '', required: false, minutes: '' });
 
   return (
     <div className="stack">

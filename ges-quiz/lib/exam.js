@@ -32,6 +32,15 @@ const toLimit = (v) => {
   return Number.isInteger(n) && n > 0 && n <= 300 ? n : null;
 };
 
+// Minutes allowed. One fixed time wins. Otherwise it is the minutes of the subjects the student is taking
+// (all subjects when `chosen` is null). 0 means no timer.
+export function examMinutes(quiz, chosen = null) {
+  if (quiz.time_limit_minutes) return quiz.time_limit_minutes;
+  const cfg = quiz.subject_config || {};
+  const names = Array.isArray(chosen) ? chosen : Object.keys(cfg);
+  return names.reduce((n, k) => n + (Number(cfg[k]?.minutes) || 0), 0);
+}
+
 const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 // Checks everything a tutor sends when saving an exam. Returns { error } or { value }.
@@ -50,7 +59,10 @@ export function cleanExam(body) {
   if (subjectsIn.length > LIMITS.subjects) return { error: `Use ${LIMITS.subjects} subjects or fewer.` };
 
   const multi = subjectsIn.length > 1;
+  const pick = multi && body.pickSubjects === true;
+  const fixed = toLimit(body.timeLimit);
   const seen = new Set();
+  const config = {};
   const questions = [];
   for (let s = 0; s < subjectsIn.length; s++) {
     const name = cleanText(subjectsIn[s]?.name, 60);
@@ -58,6 +70,7 @@ export function cleanExam(body) {
     if (multi) {
       if (seen.has(name.toLowerCase())) return { error: `"${name}" is used twice. Give each subject its own name.` };
       seen.add(name.toLowerCase());
+      config[name] = { required: pick && subjectsIn[s]?.required === true, minutes: fixed ? null : toLimit(subjectsIn[s]?.minutes) };
     }
     const list = Array.isArray(subjectsIn[s]?.questions) ? subjectsIn[s].questions : [];
     if (!list.length) return { error: `${name || 'Your subject'} has no questions.` };
@@ -83,6 +96,24 @@ export function cleanExam(body) {
   }
   if (questions.length > LIMITS.questions) return { error: `Use ${LIMITS.questions} questions or fewer in one exam.` };
 
+  // Rules for the "students pick their subjects" option and for time given per subject.
+  let maxSubjects = null;
+  if (multi) {
+    const names = Object.keys(config);
+    const required = names.filter((n) => config[n].required).length;
+    if (pick) {
+      if (required === names.length) return { error: 'Every subject is compulsory, so students have nothing to pick. Untick some, or turn the picker off.' };
+      const m = Number(body.maxSubjects);
+      if (body.maxSubjects !== null && body.maxSubjects !== '' && body.maxSubjects !== undefined) {
+        if (!Number.isInteger(m) || m < 1) return { error: 'The most subjects a student can pick must be a whole number, 1 or more.' };
+        if (m < required) return { error: `${required} subjects are compulsory, so the limit cannot be lower than ${required}.` };
+        if (m < names.length) maxSubjects = m;
+      }
+    }
+    const timed = names.filter((n) => config[n].minutes).length;
+    if (!fixed && timed && timed < names.length) return { error: 'Give every subject its minutes, or leave all of them empty.' };
+  }
+
   const code = body.code ? normCode(body.code) : '';
 
   return {
@@ -90,7 +121,10 @@ export function cleanExam(body) {
       quiz: {
         title,
         description: cleanText(body.description, 500),
-        time_limit_minutes: toLimit(body.timeLimit),
+        time_limit_minutes: fixed,
+        pick_subjects: pick,
+        max_subjects: maxSubjects,
+        subject_config: multi ? config : null,
         opens_at: opens.value,
         closes_at: closes.value,
         show_score: body.showScore !== false,

@@ -43,16 +43,17 @@ export async function GET(req, { params }) {
   }));
 
   if (new URL(req.url).searchParams.get('format') === 'csv') {
+    // Students may have picked different subjects, so each row shows only the subjects that student took.
     const subjectNames = [...new Set(results.flatMap((r) => Object.keys(r.subjects || {})))];
     const jamb = exam.track === 'jamb' && subjectNames.length > 0;
     const waec = exam.track === 'waec';
     const head = ['Name', ...(exam.ask_department ? ['Department'] : []), ...(exam.ask_level ? ['Level'] : []),
-      ...(jamb ? [`JAMB score (out of ${subjectNames.length * 100})`] : []), 'Score', 'Out of', 'Percent', ...subjectNames.map((s) => `${s} (score)`), ...(waec ? subjectNames.map((s) => `${s} (grade)`) : []), 'Time taken', 'Submitted', 'Note'];
+      ...(jamb ? ['JAMB score', 'JAMB score out of'] : []), 'Score', 'Out of', 'Percent', ...subjectNames.map((s) => `${s} (score)`), ...(waec ? subjectNames.map((s) => `${s} (grade)`) : []), 'Time taken', 'Submitted', 'Note'];
     const lines = [head.map(cell).join(',')];
     for (const r of results) {
       lines.push([
         r.name, ...(exam.ask_department ? [r.department] : []), ...(exam.ask_level ? [r.level] : []),
-        ...(jamb ? [jambTotal(r.subjects, subjectNames)] : []),
+        ...(jamb ? [jambTotal(r.subjects, subjectNames), 100 * Object.keys(r.subjects || {}).length] : []),
         r.score, r.total, `${r.percent}%`,
         ...subjectNames.map((s) => (r.subjects?.[s] ? `${r.subjects[s][0]}/${r.subjects[s][1]}` : '')),
         ...(waec ? subjectNames.map((s) => (r.subjects?.[s]?.[1] ? waecGrade(Math.round((r.subjects[s][0] / r.subjects[s][1]) * 100)) : '')) : []),

@@ -55,8 +55,8 @@ export default async function QuizPage({ params }) {
   return (
     <>
       {!quiz.station && (
-        <Link href={col ? `/c/${col.code}` : '/browse'} className="back">
-          {col ? `Back to ${col.title}` : 'Back to all quizzes'}
+        <Link href={col ? `/c/${col.code}` : '/practice'} className="back">
+          {col ? `Back to ${col.title}` : 'Back to practice'}
         </Link>
       )}
       <Quiz quiz={quiz} questions={found.questions} initialBoard={initialBoard} />
