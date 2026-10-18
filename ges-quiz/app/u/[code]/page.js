@@ -21,7 +21,7 @@ export default async function CreatorPage({ params }) {
 
   return (
     <div className="stack">
-      <Link href="/?tab=private" className="back">Back</Link>
+      <Link href="/browse?tab=private" className="back">Back</Link>
       <h1>{creator.name}</h1>
 
       <div className="card presented">

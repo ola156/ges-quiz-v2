@@ -10,7 +10,7 @@ export const getPublishedQuizzes = unstable_cache(
   async () => {
     const { data } = await db()
       .from('quizzes')
-      .select('slug, title, course, description, time_limit_minutes, questions(count)')
+      .select('slug, title, course, description, time_limit_minutes, track, school, questions(count)')
       .eq('published', true)
       .eq('listed', true)
       .order('created_at', { ascending: false });
@@ -27,7 +27,7 @@ export const getQuizBySlug = unstable_cache(
     const supabase = db();
     const { data: quiz } = await supabase
       .from('quizzes')
-      .select('id, title, course, description, time_limit_minutes, listed, allow_calculator, creators(name, post, agenda, photo_url, logo_url), collections(code, title, creators(name, post, agenda, photo_url, logo_url))')
+      .select('id, title, course, description, time_limit_minutes, listed, allow_calculator, tutor_id, opens_at, closes_at, show_score, ask_department, ask_level, creators(name, post, agenda, photo_url, logo_url), collections(code, title, creators(name, post, agenda, photo_url, logo_url))')
       .eq('slug', slug)
       .eq('published', true)
       .maybeSingle();
@@ -35,8 +35,18 @@ export const getQuizBySlug = unstable_cache(
     // A set inside a collection shows the collection's creator card, unless it has its own.
     if (!quiz.creators && quiz.collections?.creators) quiz.creators = quiz.collections.creators;
     quiz.collections = quiz.collections ? { code: quiz.collections.code, title: quiz.collections.title } : null;
+
+    // A tutor's exam runs in "station" mode (shared laptops). The tutor's account id stays on the server.
+    quiz.station = Boolean(quiz.tutor_id);
+    if (quiz.tutor_id) {
+      const { data: host } = await supabase
+        .from('members').select('display_name, centre').eq('clerk_id', quiz.tutor_id).maybeSingle();
+      quiz.host = host ? host.centre || host.display_name || null : null;
+    }
+    delete quiz.tutor_id;
+
     const { data: questions } = await supabase
-      .from('questions').select('id, text, options, image_url').eq('quiz_id', quiz.id).order('position');
+      .from('questions').select('id, text, options, image_url, subject').eq('quiz_id', quiz.id).order('position');
     return { quiz, questions: questions || [] };
   },
   ['quiz-by-slug'],

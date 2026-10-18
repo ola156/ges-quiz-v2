@@ -2,10 +2,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { parseQuestions, AI_PROMPT } from '../../lib/parse';
 import Rich from '../../components/Rich';
+import AdminStudy from '../../components/AdminStudy';
+import NavFrame from '../../components/NavFrame';
+import ThemeToggle from '../../components/ThemeToggle';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 // Added to the AI prompt so powers, fractions and chemical formulas come out in a form the site can draw.
 const MATH_NOTE = '\n\nFor any maths, powers, fractions, roots, units or chemical formulas, write them in LaTeX between dollar signs, for example $x^2$, $\\frac{a}{b}$, $\\sqrt{x}$, $H_2O$, $5 \\times 10^{3}$, $m/s^2$, $30^\\circ$. Never use the dollar sign for money, write naira or N instead.';
+// Admin page styles. The menu itself is the shared NavFrame.
+const ADMIN_CSS = `
+.adm-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.adm-stats .card { display: grid; gap: 2px; padding: 14px 16px; }
+.adm-stats span { color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+.adm-stats strong { font-size: 1.9rem; color: var(--ink); line-height: 1.1; }
+.adm-stats em { font-style: normal; color: var(--muted); font-size: 0.8rem; }
+@media (max-width: 860px) { .adm-wrap .toast { bottom: 84px; } }
+`;
 const EMPTY = { title: '', course: '', description: '', timeLimit: '', raw: '' };
 const EMPTY_CREATOR = { name: '', code: '', post: '', agenda: '', photo_url: '', logo_url: '' };
 const EMPTY_COL = { code: '', title: '', description: '', creatorId: '' };
@@ -39,9 +51,10 @@ async function shrink(file, { max = 1200, png = false } = {}) {
 export default function Admin() {
   const [pw, setPw] = useState('');
   const [authed, setAuthed] = useState(false);
-  const [view, setView] = useState('add'); // add | collections | manage
+  const [view, setView] = useState('overview'); // overview | add | collections | creators | tutors | manage
   const [quizzes, setQuizzes] = useState([]);
   const [creators, setCreators] = useState([]);
+  const [tutors, setTutors] = useState([]);
   const [collections, setCollections] = useState([]);
   const [form, setForm] = useState(EMPTY);
   const [kind, setKind] = useState('public'); // public | private
@@ -122,7 +135,18 @@ export default function Admin() {
     setMsg('');
     loadCreators(password);
     loadCollections(password);
+    loadTutors(password);
     return true;
+  }
+
+  async function loadTutors(password = pw) {
+    const res = await fetch('/api/admin/tutors', { headers: { 'x-admin-password': password } });
+    if (res.ok) setTutors((await res.json()).tutors || []);
+  }
+
+  async function setTutorActive(t, active) {
+    const res = await fetch('/api/admin/tutors', { method: 'PATCH', headers, body: JSON.stringify({ id: t.id, active }) });
+    if (res.ok) loadTutors();
   }
 
   async function loadCreators(password = pw) {
@@ -332,7 +356,7 @@ export default function Admin() {
 
   if (!authed)
     return (
-      <form className="stack" onSubmit={login}>
+      <form className="stack" onSubmit={login} style={{ maxWidth: 420, margin: '12vh auto 0', padding: '0 16px' }}>
         <h1>Admin</h1>
         <div className="card stack tight">
           <label>Password
@@ -567,22 +591,110 @@ export default function Admin() {
     );
   }
 
-  return (
-    <div className="stack">
-      <h1>Admin</h1>
+  const waiting = tutors.filter((t) => !t.active);
+  const NAV = [
+    { id: 'overview', label: 'Dashboard', icon: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z' },
+    { id: 'add', label: 'Add a quiz', icon: 'M12 5v14 M5 12h14' },
+    { id: 'manage', label: 'Manage', icon: 'M4 6h16 M4 12h16 M4 18h16', count: counts.all },
+    { id: 'collections', label: 'Collections', icon: 'M3 7l9-4 9 4-9 4-9-4z M3 12l9 4 9-4 M3 17l9 4 9-4', count: collections.length },
+    { id: 'creators', label: 'Creators', icon: 'M12 12a4 4 0 100-8 4 4 0 000 8z M4 21c0-4 4-6 8-6s8 2 8 6', count: creators.length },
+    { id: 'study', label: 'Study', icon: 'M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z M4 21V5 M9 7h6' },
+    { id: 'tutors', label: 'Tutors', icon: 'M12 3l10 5-10 5L2 8z M6 10.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-5.5', count: waiting.length || undefined, alert: waiting.length > 0 },
+  ];
+  const go = (id) => {
+    setView(id);
+    if (id === 'tutors') loadTutors();
+    window.scrollTo({ top: 0 });
+  };
+  const title = NAV.find((n) => n.id === view)?.label || 'Admin';
+  const topQuizzes = [...quizzes].sort((x, y) => (y.submissionCount || 0) - (x.submissionCount || 0)).slice(0, 5);
+  const icon = (d) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+  );
 
-      <div className="seg">
-        <button type="button" className={`seg-btn ${view === 'add' ? 'on' : ''}`} onClick={() => setView('add')}>Add a quiz</button>
-        <button type="button" className={`seg-btn ${view === 'collections' ? 'on' : ''}`} onClick={() => setView('collections')}>
-          Collections <span className="seg-count">{collections.length}</span>
+  return (
+    <NavFrame
+      items={NAV}
+      current={view}
+      onSelect={go}
+      brand={<div className="nf-brand">Instrict <span>Quizmate</span><small>Admin</small></div>}
+      tools={<ThemeToggle />}
+      footer={(
+        <button type="button" className="nf-link" onClick={() => { try { sessionStorage.removeItem('adminpw'); } catch {} setAuthed(false); setPw(''); }}>
+          {icon('M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9')}<span>Log out</span>
         </button>
-        <button type="button" className={`seg-btn ${view === 'creators' ? 'on' : ''}`} onClick={() => setView('creators')}>
-          Creators <span className="seg-count">{creators.length}</span>
-        </button>
-        <button type="button" className={`seg-btn ${view === 'manage' ? 'on' : ''}`} onClick={() => setView('manage')}>
-          Manage <span className="seg-count">{counts.all}</span>
-        </button>
-      </div>
+      )}
+    >
+      <style>{ADMIN_CSS}</style>
+      <div className="stack adm-wrap">
+      <h1>{title}</h1>
+
+      {view === 'overview' && (
+        <>
+          <div className="adm-stats">
+            <div className="card"><span>Quizzes</span><strong>{counts.all}</strong><em>{counts.public} public, {counts.private} private</em></div>
+            <div className="card"><span>Attempts</span><strong>{counts.attempts}</strong><em>across all quizzes</em></div>
+            <div className="card"><span>Collections</span><strong>{collections.length}</strong><em>{creators.length} creators</em></div>
+            <div className="card"><span>Tutors</span><strong>{tutors.length}</strong><em>{tutors.filter((t) => t.active).length} active, {waiting.length} not active</em></div>
+          </div>
+
+          <section className="card stack tight">
+            <h2 className="sec-title">Quick actions</h2>
+            <div className="row">
+              <button type="button" className="btn sm" onClick={() => go('add')}>Add a quiz</button>
+              <button type="button" className="btn sm ghost" onClick={() => go('collections')}>New collection</button>
+              <button type="button" className="btn sm ghost" onClick={() => go('manage')}>All quizzes</button>
+              <button type="button" className="btn sm ghost" onClick={() => go('tutors')}>Tutors</button>
+            </div>
+          </section>
+
+          {waiting.length > 0 && (
+            <section className="card stack tight">
+              <h2 className="sec-title">Tutors not active yet</h2>
+              {waiting.slice(0, 5).map((t) => (
+                <div key={t.id} className="tutor-row">
+                  <div>
+                    <strong>{t.name || 'Unnamed tutor'}</strong>
+                    <p className="muted small">{t.freeUsed ? 'Free session used, waiting for you' : 'Free session available'}</p>
+                  </div>
+                  <button type="button" className="btn sm" onClick={() => setTutorActive(t, true)}>Activate</button>
+                </div>
+              ))}
+            </section>
+          )}
+
+          <section className="card stack tight">
+            <div className="row between">
+              <h2 className="sec-title">Newest quizzes</h2>
+              <button type="button" className="btn sm ghost" onClick={() => go('manage')}>See all {counts.all}</button>
+            </div>
+            {!quizzes.length && <p className="muted small">Nothing yet.</p>}
+            {quizzes.slice(0, 5).map((q) => (
+              <div key={q.id} className="tutor-row">
+                <div>
+                  <strong>{q.title}</strong>
+                  <p className="muted small">{q.course || (q.listed === false ? 'Private set' : 'Public quiz')}{q.published ? '' : ', hidden'}</p>
+                </div>
+                <button type="button" className="btn sm ghost" onClick={() => { setSearch(q.title); setFilter('all'); go('manage'); }}>Manage</button>
+              </div>
+            ))}
+          </section>
+
+          <section className="card stack tight">
+            <h2 className="sec-title">Most played</h2>
+            {!topQuizzes.length && <p className="muted small">Nothing yet.</p>}
+            {topQuizzes.map((q) => (
+              <div key={q.id} className="tutor-row">
+                <div>
+                  <strong>{q.title}</strong>
+                  <p className="muted small">{q.course || (q.listed === false ? 'Private set' : 'Public quiz')}</p>
+                </div>
+                <strong>{q.submissionCount || 0}</strong>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
 
       {view === 'add' && (
         <>
@@ -848,6 +960,34 @@ export default function Admin() {
         </>
       )}
 
+      {view === 'study' && <AdminStudy pw={pw} flash={flash} />}
+
+      {view === 'tutors' && (
+        <>
+          <section className="card stack">
+            <h2 className="sec-title">Tutor accounts</h2>
+            <p className="hint">
+              New tutors get one free session. Switch a tutor on here after they message you, and they have no limit.
+            </p>
+          </section>
+          {!tutors.length && <p className="muted">No tutors have signed up yet.</p>}
+          {tutors.map((t) => (
+            <section key={t.id} className="card stack tight">
+              <div className="tutor-row">
+                <div>
+                  <strong>{t.name || 'Unnamed tutor'}</strong>
+                  <p className="muted small">{[t.email, t.centre].filter(Boolean).join(', ')}</p>
+                  <p className="muted small">{t.active ? 'Active' : t.freeUsed ? 'Free session used' : 'Free session available'}</p>
+                </div>
+                <button type="button" className={`btn sm ${t.active ? 'ghost' : ''}`} onClick={() => setTutorActive(t, !t.active)}>
+                  {t.active ? 'Switch off' : 'Activate'}
+                </button>
+              </div>
+            </section>
+          ))}
+        </>
+      )}
+
       {view === 'manage' && (
         <>
           <div className="stats">
@@ -891,6 +1031,7 @@ export default function Admin() {
       )}
 
       {toast && <div className="toast" role="status">{toast}</div>}
-    </div>
+      </div>
+    </NavFrame>
   );
 }

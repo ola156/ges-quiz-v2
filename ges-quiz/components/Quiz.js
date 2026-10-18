@@ -31,7 +31,15 @@ function makePlan(questions) {
     const idx = q.options.map((_, k) => k);
     opts[q.id] = q.options.some((o) => KEEP_ORDER.test(o)) ? idx : shuffle(idx);
   }
-  return { qs: shuffle(questions.map((q) => q.id)), opts };
+  // Exams with subjects keep the subjects in order and shuffle inside each one.
+  const groups = [];
+  const at = new Map();
+  for (const q of questions) {
+    const key = q.subject || '';
+    if (!at.has(key)) { at.set(key, groups.length); groups.push([]); }
+    groups[at.get(key)].push(q.id);
+  }
+  return { qs: groups.flatMap(shuffle), opts };
 }
 
 // Always a v4 UUID, because the server rejects anything else.
@@ -208,6 +216,9 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   const [pinFlash, setPinFlash] = useState('');
   const [showRestore, setShowRestore] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
+  const station = Boolean(quiz.station);
+  const attemptRef = useRef('');
+  const keyRef = useRef(null); // set while a question is on screen, so the keyboard shortcuts know where we are
    const creatorUrl = process.env.NEXT_PUBLIC_CREATOR_GROUP_URL || "";
 
 
@@ -221,6 +232,9 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   const [left, setLeft] = useState(limit);
 
   const stateKey = `quizState:${quiz.id}`;
+  // On a shared laptop an unfinished attempt must not carry over to the next student,
+  // so tutor exams keep it only for the life of the tab.
+  const keep = () => (station ? window.sessionStorage : window.localStorage);
   const byId = Object.fromEntries(questions.map((qq) => [qq.id, qq]));
   const ordered = plan ? plan.qs.map((id) => byId[id]) : questions;
   const q = ordered[i];
@@ -241,18 +255,22 @@ export default function Quiz({ quiz, questions, initialBoard }) {
           quizId: quiz.id,
           answers: answersRef.current,
           profile: p,
-          clientId: getClientId(),
+          clientId: station ? attemptRef.current || (attemptRef.current = makeUuid()) : getClientId(),
           token: tokenRef.current,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Something went wrong');
-      const saved = { ...data.profile, whatsapp: p.whatsapp || '' };
-      try {
-        localStorage.setItem('profile', JSON.stringify(saved));
-        localStorage.removeItem(stateKey);
-      } catch {}
-      setProfile((prev) => ({ ...prev, ...saved }));
+      if (station) {
+        try { keep().removeItem(stateKey); } catch {}
+      } else {
+        const saved = { ...data.profile, whatsapp: p.whatsapp || '' };
+        try {
+          localStorage.setItem('profile', JSON.stringify(saved));
+          localStorage.removeItem(stateKey);
+        } catch {}
+        setProfile((prev) => ({ ...prev, ...saved }));
+      }
       setResult(data);
       setStep('result');
       window.scrollTo({ top: 0 });
@@ -268,6 +286,12 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   function goToScore(out) {
     setTimedOut(out);
     window.scrollTo({ top: 0 });
+    if (station) {
+      // The name was typed before the exam started, so go straight to marking.
+      setStep('saving');
+      submit(profile);
+      return;
+    }
     const p = savedProfile();
     if (p) {
       setProfile((prev) => ({ ...prev, ...p }));
@@ -282,11 +306,11 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   useEffect(() => {
     if (booted.current) return;
     booted.current = true;
-    const p = savedProfile();
+    const p = station ? null : savedProfile();
     if (p) setProfile((prev) => ({ ...prev, ...p }));
     setPinSet(pinIsSet());
     try {
-      const s = JSON.parse(localStorage.getItem(stateKey) || 'null');
+      const s = JSON.parse(keep().getItem(stateKey) || 'null');
       if (!s || !s.plan || !s.token) return;
       const age = (Date.now() - s.startedAt) / 1000;
       const planOk =
@@ -294,8 +318,12 @@ export default function Quiz({ quiz, questions, initialBoard }) {
         s.plan.qs.every((id) => byId[id]) &&
         Object.entries(s.plan.opts).every(([id, o]) => byId[id] && byId[id].options.length === o.length);
       if (!planOk || age > SIX_HOURS) {
-        localStorage.removeItem(stateKey);
+        keep().removeItem(stateKey);
         return;
+      }
+      if (station) {
+        attemptRef.current = s.attemptId || '';
+        if (s.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
       }
       startRef.current = s.startedAt;
       answersRef.current = s.answers || {};
@@ -305,6 +333,10 @@ export default function Quiz({ quiz, questions, initialBoard }) {
       setAnswers(s.answers || {});
       setI(Math.min(s.i || 0, questions.length - 1));
       if (s.phase === 'gate') {
+        if (station) {
+          setStep('gate');
+          return;
+        }
         goToScore(Boolean(s.timedOut));
       } else if (limit && age >= limit) {
         goToScore(true);
@@ -319,21 +351,30 @@ export default function Quiz({ quiz, questions, initialBoard }) {
   useEffect(() => {
     if (step !== 'quiz' && step !== 'gate' && step !== 'saving') return;
     try {
-      localStorage.setItem(stateKey, JSON.stringify({
+      keep().setItem(stateKey, JSON.stringify({
         phase: step === 'quiz' ? 'quiz' : 'gate',
         startedAt: startRef.current, token, plan, answers, i, timedOut,
+        ...(station ? { attemptId: attemptRef.current, profile: { name: profile.name, department: profile.department, level: profile.level } } : {}),
       }));
     } catch {}
   }, [step, answers, i, token, plan, timedOut]);
 
   // Department suggestions are only needed when the first-time form is on screen.
   useEffect(() => {
-    if (step !== 'gate' || deps.length) return;
+    const wantsDeps = station ? step === 'intro' && quiz.ask_department : step === 'gate';
+    if (!wantsDeps || deps.length) return;
     fetch('/api/departments')
       .then((r) => r.json())
       .then((d) => setDeps(d.departments || []))
       .catch(() => {});
   }, [step]);
+
+  // After a tutor exam is handed in, the screen goes back to the name box for the next student.
+  useEffect(() => {
+    if (!station || step !== 'result' || !result?.hidden) return;
+    const t = setTimeout(() => window.location.reload(), 8000);
+    return () => clearTimeout(t);
+  }, [step, result]);
 
   // The server stamps the start time. This runs in the background so Start never waits.
   function fetchToken(tries) {
@@ -355,6 +396,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
 
   function start() {
     startRef.current = Date.now();
+    attemptRef.current = station ? makeUuid() : '';
     tokenRef.current = '';
     answersRef.current = {};
     setPlan(makePlan(questions));
@@ -425,7 +467,60 @@ export default function Quiz({ quiz, questions, initialBoard }) {
     setPinSet(true);
   }
 
+  // Keyboard shortcuts: A to E choose an option, N next, P previous. One listener for the whole page.
+  useEffect(() => {
+    const onKey = (e) => keyRef.current && keyRef.current(e);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  keyRef.current = null;
+
   if (!questions.length) return <p className="muted">This quiz has no questions yet.</p>;
+
+  if (step === 'intro' && station) {
+    const subjects = [];
+    for (const qq of questions) {
+      const k = qq.subject || '';
+      const found = subjects.find((x) => x.name === k);
+      if (found) found.n += 1;
+      else subjects.push({ name: k, n: 1 });
+    }
+    const ready = profile.name.trim() && (!quiz.ask_department || profile.department.trim()) && (!quiz.ask_level || profile.level);
+    return (
+      <form className="stack" onSubmit={(e) => { e.preventDefault(); if (ready) start(); }}>
+        <h1>{quiz.title}</h1>
+        {quiz.host && <p className="muted">{quiz.host}</p>}
+        {quiz.description && <p>{quiz.description}</p>}
+        <p className="meta">
+          {questions.length} questions{quiz.time_limit_minutes ? `, ${quiz.time_limit_minutes} minutes in total` : ''}
+        </p>
+        {subjects.length > 1 && (
+          <div className="chips">
+            {subjects.map((x) => <span key={x.name} className="chip">{x.name}: {x.n}</span>)}
+          </div>
+        )}
+        <label>Your full name
+          <input required autoComplete="off" maxLength={80} value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
+        </label>
+        {quiz.ask_department && (
+          <label>Department
+            <input required list="departments" autoComplete="off" maxLength={80} value={profile.department} onChange={(e) => setProfile({ ...profile, department: e.target.value })} />
+            <datalist id="departments">{deps.map((d) => <option key={d} value={d} />)}</datalist>
+          </label>
+        )}
+        {quiz.ask_level && (
+          <label>Level
+            <select required value={profile.level} onChange={(e) => setProfile({ ...profile, level: e.target.value })}>
+              <option value="">Select level</option>
+              {LEVELS.map((l) => <option key={l} value={l}>{l} level</option>)}
+            </select>
+          </label>
+        )}
+        <p className="muted small">The timer starts when you press Start. Questions and options are shuffled.</p>
+        <button className="btn" disabled={!ready}>Start</button>
+      </form>
+    );
+  }
 
   if (step === 'intro')
     return (
@@ -481,25 +576,85 @@ export default function Quiz({ quiz, questions, initialBoard }) {
 
   if (step === 'quiz') {
     const order = plan.opts[q.id];
+    // Subjects: each one is its own tab with its own questions.
+    const groups = [];
+    ordered.forEach((qq, idx) => {
+      const name = qq.subject || '';
+      const g = groups[groups.length - 1];
+      if (g && g.name === name) g.end = idx;
+      else groups.push({ name, start: idx, end: idx });
+    });
+    const gi = groups.findIndex((g) => i >= g.start && i <= g.end);
+    const grp = groups[gi];
+    const multi = groups.length > 1;
+    const inGroup = grp.end - grp.start + 1;
+    const lastOfGroup = i === grp.end;
+    const isLastQuestion = last;
+    const openTab = (g) => {
+      const firstOpen = ordered.slice(g.start, g.end + 1).findIndex((x) => answers[x.id] === undefined);
+      setI(g.start + (firstOpen === -1 ? 0 : firstOpen));
+      window.scrollTo({ top: 0 });
+    };
+    const submitNow = () => {
+      const left = ordered.length - Object.keys(answers).length;
+      if (left > 0 && !confirm(`You have ${left} unanswered ${left === 1 ? 'question' : 'questions'}. They count as wrong. Submit anyway?`)) return;
+      goToScore(false);
+    };
+    const goNext = () => {
+      if (!lastOfGroup) setI(i + 1);
+      else if (!isLastQuestion) openTab(groups[gi + 1]);
+    };
+    keyRef.current = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      const t = e.target;
+      if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+      const k = String(e.key).toLowerCase();
+      const pos = k.length === 1 ? 'abcde'.indexOf(k) : -1;
+      if (pos >= 0 && pos < order.length) {
+        e.preventDefault();
+        setAnswers((a) => ({ ...a, [q.id]: order[pos] }));
+      } else if (k === 'n') {
+        e.preventDefault();
+        goNext();
+      } else if (k === 'p') {
+        e.preventDefault();
+        if (i > 0) setI(i - 1);
+      }
+    };
+    const inThis = ordered.slice(grp.start, grp.end + 1);
+    const doneHere = inThis.filter((x) => answers[x.id] !== undefined).length;
     return (
       <section className="stack">
+        {multi && (
+          <div role="tablist" aria-label="Subjects" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+            {groups.map((g, n) => {
+              const done = ordered.slice(g.start, g.end + 1).filter((x) => answers[x.id] !== undefined).length;
+              return (
+                <button key={g.name} type="button" role="tab" aria-selected={n === gi}
+                  className={`btn sm ${n === gi ? '' : 'ghost'}`} style={{ flex: '0 0 auto' }} onClick={() => openTab(g)}>
+                  {g.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="row between">
-          <p className="meta">Question {i + 1} of {ordered.length}</p>
+          <p className="meta">{multi ? `${grp.name}: question ${i - grp.start + 1} of ${inGroup}` : `Question ${i + 1} of ${ordered.length}`}</p>
           <div className="row">
             {quiz.allow_calculator && (
               <button type="button" className="btn sm ghost" aria-expanded={calcOpen} onClick={() => setCalcOpen((o) => !o)}>
-                {calcOpen ? 'Hide calculator' : 'Calculator'}
+                {calcOpen ? 'Hide' : 'Calculator'}
               </button>
             )}
             {limit > 0 && <span className={`timer ${left <= 60 ? 'low' : ''}`}>{mmss(left)}</span>}
           </div>
         </div>
-        <div className="progress"><div style={{ width: `${((i + 1) / ordered.length) * 100}%` }} /></div>
         {quiz.allow_calculator && (
           <div style={{ display: calcOpen ? 'block' : 'none' }}>
             <Calculator />
           </div>
         )}
+        {q.subject && !multi && <div className="chips"><span className="chip">{q.subject}</span></div>}
         <h2 className="qtext"><Rich text={q.text} /></h2>
         {q.image_url && <img className="qimg" src={q.image_url} alt="" />}
         <div className="stack tight">
@@ -516,13 +671,50 @@ export default function Quiz({ quiz, questions, initialBoard }) {
         </div>
         <div className="row">
           <button className="btn ghost" disabled={i === 0} onClick={() => setI(i - 1)}>Previous</button>
-          {last ? (
-            <button className="btn" onClick={() => goToScore(false)}>Submit and see my score</button>
+          {isLastQuestion ? (
+            <button className="btn" onClick={() => goToScore(false)}>{station ? 'Submit' : 'Submit and see my score'}</button>
+          ) : lastOfGroup ? (
+            <button className="btn" onClick={goNext}>Next subject: {groups[gi + 1].name}</button>
           ) : (
-            <button className="btn" onClick={() => setI(i + 1)}>Next</button>
+            <button className="btn" onClick={goNext}>Next</button>
           )}
         </div>
-        {last && Object.keys(answers).length < ordered.length && (
+        <p className="muted small">Keyboard: A to {LETTERS[order.length - 1]} choose an answer, N next, P previous.</p>
+        <div className="card stack tight" aria-label="Question numbers">
+          <div className="row between">
+            <strong className="small">{multi ? `${grp.name}: ` : ''}{doneHere} of {inGroup} answered</strong>
+            <span className="muted small">{inGroup - doneHere} to go</span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {inThis.map((x, n) => {
+              const idx = grp.start + n;
+              const done = answers[x.id] !== undefined;
+              const here = idx === i;
+              return (
+                <button
+                  key={x.id}
+                  type="button"
+                  onClick={() => setI(idx)}
+                  aria-current={here ? 'true' : undefined}
+                  aria-label={`Question ${n + 1}, ${done ? 'answered' : 'not answered'}`}
+                  style={{
+                    width: 38, height: 38, borderRadius: 10, fontWeight: 700, cursor: 'pointer', font: 'inherit',
+                    border: `2px solid ${here ? 'var(--blue-dark)' : done ? 'var(--blue)' : 'var(--line)'}`,
+                    background: here ? 'var(--blue)' : done ? 'var(--tint)' : '#fff',
+                    color: here ? '#fff' : done ? 'var(--blue-dark)' : 'var(--ink)',
+                  }}
+                >
+                  {n + 1}
+                </button>
+              );
+            })}
+          </div>
+          
+        </div>
+        {multi && !isLastQuestion && (
+          <div><button type="button" className="btn sm ghost" onClick={submitNow}>Submit the whole exam now</button></div>
+        )}
+        {isLastQuestion && Object.keys(answers).length < ordered.length && (
           <p className="muted small">{ordered.length - Object.keys(answers).length} unanswered. They count as wrong.</p>
         )}
       </section>
@@ -534,6 +726,18 @@ export default function Quiz({ quiz, questions, initialBoard }) {
       <section className="stack">
         <h1>{timedOut ? 'Time is up' : 'Marking your quiz...'}</h1>
         <p className="muted">One second, getting your score and rank.</p>
+      </section>
+    );
+
+  if (step === 'gate' && station)
+    return (
+      <section className="stack">
+        <h1>{timedOut ? 'Time is up' : 'Your answers are saved'}</h1>
+        <p className="muted">They have not been handed in yet. Press the button to send them.</p>
+        {error && <p className="error">{error}</p>}
+        <button className="btn" disabled={busy} onClick={() => { setStep('saving'); submit(profile); }}>
+          {busy ? 'Sending...' : 'Hand in my answers'}
+        </button>
       </section>
     );
 
@@ -584,6 +788,53 @@ export default function Quiz({ quiz, questions, initialBoard }) {
       </form>
       </div>
     );
+
+  // result, tutor exam
+  if (station) {
+    if (result.hidden)
+      return (
+        <section className="stack">
+          <h1>Thank you, {result.name}</h1>
+          <p className="muted">Your answers have been handed in. Your tutor will share the results.</p>
+          <button className="btn" onClick={() => window.location.reload()}>Next student</button>
+          <p className="muted small">This page resets by itself in a few seconds.</p>
+        </section>
+      );
+    const byId = Object.fromEntries(result.review.map((r) => [r.id, r]));
+    return (
+      <section className="stack">
+        <div className="score">
+          <span className="big">{result.score}/{result.total}</span>
+          <span className="muted">{Math.round((result.score / result.total) * 100)}%, {result.name}</span>
+        </div>
+        {result.subjectScores && Object.keys(result.subjectScores).length > 1 && (
+          <div className="chips">
+            {Object.entries(result.subjectScores).map(([k, v]) => <span key={k} className="chip">{k}: {v[0]}/{v[1]}</span>)}
+          </div>
+        )}
+        {result.late && <p className="card muted small">You handed in after the time was up.</p>}
+        <button className="btn" onClick={() => window.location.reload()}>Next student</button>
+        <h2>Top scores</h2>
+        <Board rows={result.setBoard} />
+        <h2>Corrections</h2>
+        {ordered.map((qq, n) => {
+          const r = byId[qq.id];
+          const ok = r.chosen === r.correct;
+          return (
+            <div key={qq.id} className={`card review ${ok ? 'ok' : 'bad'}`}>
+              <p className="meta">{qq.subject ? `${qq.subject}, ` : ''}Question {n + 1}: {ok ? 'Correct' : r.chosen === null ? 'Not answered' : 'Wrong'}</p>
+              <p className="qtext"><Rich text={qq.text} /></p>
+              {qq.image_url && <img className="qimg" src={qq.image_url} alt="" />}
+              <p>Correct answer: <strong><Rich text={qq.options[r.correct]} /></strong></p>
+              {!ok && r.chosen !== null && <p className="muted">You picked: <Rich text={qq.options[r.chosen]} /></p>}
+              {r.explanation && <p className="small">Why: <Rich text={r.explanation} /></p>}
+            </div>
+          );
+        })}
+        <button className="btn" onClick={() => window.location.reload()}>Next student</button>
+      </section>
+    );
+  }
 
   // result
   const pct = Math.round((result.score / result.total) * 100);
@@ -682,7 +933,7 @@ export default function Quiz({ quiz, questions, initialBoard }) {
           </div>
         );
       })}
-      <Link className="btn ghost" href="/">Try another set</Link>
+      <Link className="btn ghost" href="/browse">Try another set</Link>
       <button className="btn ghost" onClick={switchAccount}>Not @{result.username}? Use a different name</button>
     </section>
   );

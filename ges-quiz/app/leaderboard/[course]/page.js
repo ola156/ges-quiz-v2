@@ -23,7 +23,7 @@ export default async function CourseLeaderboard({ params }) {
 
   return (
     <div className="stack">
-      <Link href="/" className="back">Back to all quizzes</Link>
+      <Link href="/browse" className="back">Back to all quizzes</Link>
       <h1>{name} leaderboard</h1>
       <p className="muted">Points are your newest score in each set, added together. Finish more sets to climb.</p>
       <p className="muted small">{rows.length} {rows.length === 1 ? 'student' : 'students'} ranked</p>

@@ -22,7 +22,7 @@ export default async function CoursePage({ params }) {
 
   return (
     <div className="stack">
-      <Link href="/" className="back">All courses</Link>
+      <Link href="/browse" className="back">All courses</Link>
 
       <header className="hero">
         <span className="pill">{sets.length} {sets.length === 1 ? "set" : "sets"} · {totalQuestions} questions</span>

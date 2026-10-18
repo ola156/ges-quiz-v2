@@ -23,7 +23,7 @@ export default async function CollectionPage({ params }) {
 
   return (
     <div className="stack">
-      <Link href={creator?.code ? `/u/${creator.code}` : '/?tab=private'} className="back">
+      <Link href={creator?.code ? `/u/${creator.code}` : '/browse?tab=private'} className="back">
         {creator?.code ? `Back to all courses by ${creator.name}` : 'Back'}
       </Link>
       <h1>{col.title}</h1>

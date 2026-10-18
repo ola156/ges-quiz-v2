@@ -42,7 +42,9 @@ export function parseQuestions(raw) {
     const ans = line.match(/^(?:answer|ans|correct(?:\s*answer)?)\s*[:\-]\s*\(?([A-Ea-e])\)?/i);
     const exp = line.match(/^(?:explanation|reason|rationale)\s*[:\-]\s*(.*)$/i);
     const opt = line.match(/^\(?([A-Ea-e])[.)\]:]\s*(.+)$/);
-    const q = line.match(/^(?:question|q)?\s*(\d+)\s*[.):\-]\s*(.*)$/i);
+    // A new question starts with "1." or "1)" and then a space or a letter. "2.5 m/s" or "10 - 4"
+    // on a continuation line is part of the question, not a new one.
+    const q = line.match(/^(?:question|q)?\s*(\d+)\s*(?:[.):]\s+|[.)](?=\D))(.*)$/i);
 
     if (ans && cur) {
       cur.answer = ans[1].toUpperCase();
