@@ -8,7 +8,7 @@ const FOLDERS = ['questions', 'creators'];
 
 // Takes one already-resized image and returns its public address in the 'quiz-images' bucket.
 export async function POST(req) {
-  if (!isAdmin(req)) return NextResponse.json({ error: 'Wrong password' }, { status: 401 });
+  if (!(await isAdmin(req))) return NextResponse.json({ error: 'Wrong password' }, { status: 401 });
   const form = await req.formData();
   const file = form.get('file');
   const folder = FOLDERS.includes(form.get('folder')) ? form.get('folder') : 'questions';

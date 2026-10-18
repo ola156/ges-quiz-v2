@@ -27,7 +27,7 @@ const toLimit = (v) => {
 const toImage = (v) => (typeof v === 'string' && /^https:\/\//.test(v) && v.length < 600 ? v : null);
 
 export async function GET(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const { data: quizzes, error } = await db()
     .from('quizzes')
     .select('id, slug, title, course, published, listed, allow_calculator, collection_id, time_limit_minutes, created_at, creators(name), collections(code, title), questions(count), submissions(count)')
@@ -43,7 +43,7 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const { title, course, description, timeLimit, questions, kind, creatorId, collectionId, allowCalculator } = await req.json();
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   if (!Array.isArray(questions) || !questions.length)
@@ -108,7 +108,7 @@ export async function POST(req) {
 }
 
 export async function PATCH(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const body = await req.json();
   const supabase = db();
   const update = {};
@@ -133,7 +133,7 @@ export async function PATCH(req) {
 }
 
 export async function DELETE(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const { id } = await req.json();
   const { error } = await db().from('quizzes').delete().eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

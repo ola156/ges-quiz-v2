@@ -817,6 +817,76 @@ h2.sec-title { margin: 0; display: flex; align-items: center; gap: 10px; font-si
 .dh-go:disabled { opacity: 0.35; cursor: not-allowed; }
 .dh-dots { font-weight: 700; letter-spacing: 1px; line-height: 1; }
 
+
+/* ================= LANDING: STUDY MODE SECTION ================= */
+/* Add at the very end of app/globals.css. Every class starts with lp2-. */
+
+.lp2-study {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 64px;
+  align-items: center;
+  padding: 56px 0 72px;
+  border-top: 1px solid var(--wash-strong);
+  scroll-margin-top: 16px;
+}
+.lp2-eyebrow {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--link);
+}
+.lp2-h2 { margin: 12px 0 14px; max-width: 12em; font-size: clamp(1.8rem, 3.6vw, 2.5rem); line-height: 1.1; letter-spacing: -0.03em; }
+.lp2-copy { max-width: 33em; font-size: 1.05rem; color: var(--on-dark-muted); }
+
+.lp2-points { list-style: none; margin: 28px 0 0; padding: 0; border-top: 1px solid var(--surface-line); }
+.lp2-points li { display: grid; grid-template-columns: 2.4em 1fr; gap: 3px 10px; padding: 16px 0; border-bottom: 1px solid var(--surface-line); }
+.lp2-points .no { padding-top: 3px; font-family: var(--font-mono), monospace; font-size: 0.82rem; color: var(--on-dark-muted); }
+.lp2-points strong { color: var(--head); font-size: 1.02rem; }
+.lp2-points .d { grid-column: 2; color: var(--on-dark-muted); font-size: 0.95rem; }
+
+.lp2-cta { margin-top: 22px; }
+.lp2-go { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--head); text-decoration: none; padding-bottom: 3px; border-bottom: 2px solid var(--blue); }
+.lp2-go:hover { border-bottom-color: var(--link); }
+.lp2-go span { transition: transform 0.15s; }
+.lp2-go:hover span { transform: translateX(3px); }
+
+/* the drawing of the study screen */
+.lp2-app { margin: 0; overflow: hidden; border-radius: 18px; background: var(--card); color: var(--ink); box-shadow: 0 18px 50px rgba(54, 36, 241, 0.28); }
+.lp2-app-bar { display: flex; justify-content: space-between; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); font-family: var(--font-mono), monospace; font-size: 0.74rem; color: var(--muted); }
+.lp2-app-body { padding: 20px 20px 8px; }
+.lp2-app h3 { margin: 0; font-size: 1.3rem; letter-spacing: -0.01em; color: var(--ink); }
+.lp2-app-sub { display: flex; justify-content: space-between; margin-top: 4px; font-size: 0.85rem; color: var(--muted); }
+.lp2-meter { height: 4px; margin: 10px 0 6px; border-radius: 99px; background: var(--tint-line); overflow: hidden; }
+.lp2-meter span { display: block; height: 100%; border-radius: 99px; background: var(--blue); }
+.lp2-rows { list-style: none; margin: 14px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.lp2-row { display: flex; align-items: center; gap: 14px; padding: 14px 2px; border-bottom: 1px solid var(--line); }
+.lp2-row:last-child { border-bottom: 0; }
+.lp2-row .n { min-width: 1.6em; font-family: var(--font-mono), monospace; font-size: 0.82rem; color: var(--muted); }
+.lp2-row .t { flex: 1; min-width: 0; font-weight: 600; color: var(--ink); }
+.lp2-row .t small { display: block; margin-top: 1px; font-weight: 400; font-size: 0.82rem; color: var(--muted); }
+.lp2-row .chev { font-size: 1.5rem; line-height: 1; color: var(--muted); }
+.lp2-row .tick { font-weight: 700; color: var(--green); }
+.lp2-resume {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 16px 64px 16px 20px;
+  background: var(--tint);
+  border-top: 1px solid var(--tint-line);
+}
+.lp2-resume .l { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--blue-dark); }
+.lp2-resume strong { font-size: 1.02rem; color: var(--ink); }
+.lp2-resume .s { font-size: 0.85rem; color: var(--muted); }
+.lp2-resume .go { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 700; }
+
+@media (max-width: 860px) {
+  .lp2-study { grid-template-columns: minmax(0, 1fr); gap: 36px; padding: 40px 0 48px; }
+}
+
+
 @media (max-width: 860px) {
   .lp-hero { grid-template-columns: 1fr; gap: 36px; padding: 28px 0 48px; }
   .lp-steps { grid-template-columns: 1fr; gap: 24px; }

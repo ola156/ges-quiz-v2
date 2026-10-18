@@ -11,7 +11,7 @@ const ID = /^user_[A-Za-z0-9]{10,60}$/;
 
 // One page of students at a time, searched and filtered in the database, so it stays fast with thousands of accounts.
 export async function GET(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const u = new URL(req.url);
   const page = Math.max(0, parseInt(u.searchParams.get('page') || '0', 10) || 0);
   const track = u.searchParams.get('track') || '';
@@ -42,7 +42,7 @@ export async function GET(req) {
 
 // Fix a student's exam or school.
 export async function PATCH(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   let b;
   try { b = await req.json(); } catch { return bad('Bad request'); }
   if (typeof b.id !== 'string' || !ID.test(b.id) || !TRACKS[b.track]) return bad('Bad request');
@@ -58,7 +58,7 @@ export async function PATCH(req) {
 
 // Reset: removes the profile record only. The sign-in account stays, and the student picks their exam again next time.
 export async function DELETE(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   let b;
   try { b = await req.json(); } catch { return bad('Bad request'); }
   if (typeof b.id !== 'string' || !ID.test(b.id)) return bad('Bad request');

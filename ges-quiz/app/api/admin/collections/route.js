@@ -29,14 +29,14 @@ function shape(c) {
 }
 
 export async function GET(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const { data, error } = await db().from('collections').select(SELECT).order('created_at', { ascending: false });
   if (error) return fail(error.message, 500);
   return NextResponse.json({ collections: (data || []).map(shape) });
 }
 
 export async function POST(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const body = await req.json();
   const code = normCode(body.code);
   const title = clean(body.title, 80);
@@ -56,7 +56,7 @@ export async function POST(req) {
 }
 
 export async function PATCH(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const body = await req.json();
   if (!body.id) return fail('Missing collection');
   const supabase = db();
@@ -82,7 +82,7 @@ export async function PATCH(req) {
 }
 
 export async function DELETE(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const { id } = await req.json();
   // The sets stay as ordinary private sets, each with its own code.
   const { error } = await db().from('collections').delete().eq('id', id);

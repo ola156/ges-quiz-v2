@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-// Only these need an account. Everything else (code box, quiz links, leaderboards, the
-// admin page with its own password) stays open exactly as before.
-const needsAccount = createRouteMatcher(['/onboarding(.*)', '/dashboard(.*)', '/api/me(.*)', '/api/tutor(.*)', '/study(.*)', '/api/study(.*)', '/profile(.*)']);
+// Only these need an account. Everything else (code box, quiz links, leaderboards) stays open exactly as before.
+// The admin area needs an account too, and then the admin check on top (see lib/admin.js).
+const needsAccount = createRouteMatcher(['/onboarding(.*)', '/dashboard(.*)', '/api/me(.*)', '/api/tutor(.*)', '/study(.*)', '/api/study(.*)', '/profile(.*)', '/admin(.*)', '/api/admin(.*)']);
 
 export default clerkMiddleware(async (auth, req) => {
   if (needsAccount(req)) await auth.protect();

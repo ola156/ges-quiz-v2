@@ -11,7 +11,7 @@ const toImage = (v) => (typeof v === 'string' && /^https:\/\//.test(v) && v.leng
 const COLS = 'id, name, post, agenda, photo_url, logo_url, code';
 
 export async function GET(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const { data, error } = await db()
     .from('creators')
     .select(COLS)
@@ -21,7 +21,7 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const body = await req.json();
   const name = clean(body.name, 80);
   if (!name) return fail('Creator name is required');
@@ -53,7 +53,7 @@ export async function POST(req) {
 
 // Sets or removes a creator's code word.
 export async function PATCH(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const body = await req.json();
   if (!body.id) return fail('Missing creator');
   const supabase = db();
@@ -69,7 +69,7 @@ export async function PATCH(req) {
 }
 
 export async function DELETE(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const { id } = await req.json();
   const { error } = await db().from('creators').delete().eq('id', id);
   if (error) return fail(error.message, 500);

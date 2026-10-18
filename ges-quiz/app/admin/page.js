@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import { useClerk } from '@clerk/nextjs';
 import { parseQuestions, AI_PROMPT } from '../../lib/parse';
 import Rich from '../../components/Rich';
 import AdminStudy from '../../components/AdminStudy';
@@ -52,6 +53,7 @@ async function shrink(file, { max = 1200, png = false } = {}) {
 }
 
 export default function Admin() {
+  const { signOut } = useClerk();
   const [pw, setPw] = useState('');
   const [authed, setAuthed] = useState(false);
   const [view, setView] = useState('overview'); // overview | add | manage | newcollection | collections | newlesson | study | students | tutors
@@ -131,7 +133,7 @@ export default function Admin() {
 
   async function load(password = pw) {
     const res = await fetch('/api/admin/quizzes', { headers: { 'x-admin-password': password } });
-    if (res.status === 401) { setAuthed(false); setMsg('Wrong password'); return false; }
+    if (res.status === 401 || res.status === 404) { setAuthed(false); setMsg('This account does not have admin access.'); return false; }
     const data = await res.json();
     setQuizzes(data.quizzes || []);
     setAuthed(true);
@@ -162,15 +164,8 @@ export default function Admin() {
     if (res.ok) setCollections((await res.json()).collections || []);
   }
 
-  useEffect(() => {
-    const saved = sessionStorage.getItem('adminpw');
-    if (saved) { setPw(saved); load(saved); }
-  }, []);
-
-  async function login(e) {
-    e.preventDefault();
-    if (await load()) sessionStorage.setItem('adminpw', pw);
-  }
+  // Signing in with Clerk is the key. The server decides if this account is an admin.
+  useEffect(() => { load(''); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resize in the browser, then upload. Returns the public address.
   async function uploadImage(file, folder, opts) {
@@ -359,16 +354,10 @@ export default function Admin() {
 
   if (!authed)
     return (
-      <form className="stack" onSubmit={login} style={{ maxWidth: 420, margin: '12vh auto 0', padding: '0 16px' }}>
+      <div className="stack" style={{ maxWidth: 420, margin: '12vh auto 0', padding: '0 16px' }}>
         <h1>Admin</h1>
-        <div className="card stack tight">
-          <label>Password
-            <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
-          </label>
-          {msg && <p className="error small">{msg}</p>}
-          <button className="btn">Log in</button>
-        </div>
-      </form>
+        <p className="muted">{msg || 'Checking access...'}</p>
+      </div>
     );
 
   const canPublish = form.title.trim() && parsed.questions.length && !busy && uploading === null;
@@ -625,7 +614,7 @@ export default function Admin() {
       brand={<div className="nf-brand">Instrict <span>Quizmate</span><small>Admin</small></div>}
       tools={<ThemeToggle />}
       footer={(
-        <button type="button" className="nf-link" onClick={() => { try { sessionStorage.removeItem('adminpw'); } catch {} setAuthed(false); setPw(''); }}>
+        <button type="button" className="nf-link" onClick={() => signOut({ redirectUrl: '/' })}>
           {icon('M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9')}<span>Log out</span>
         </button>
       )}

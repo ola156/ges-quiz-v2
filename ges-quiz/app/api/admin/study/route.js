@@ -19,7 +19,7 @@ async function body(req) {
 }
 
 export async function GET(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   try {
     return NextResponse.json({ subjects: await adminTree() });
   } catch (e) {
@@ -118,7 +118,7 @@ const fresh = (res) => {
 };
 
 export async function POST(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const b = await body(req);
   if (!b) return bad('Bad request');
   if (b.action === 'seed') return fresh(await seed());
@@ -128,7 +128,7 @@ export async function POST(req) {
 
 // Hide, show or rename a subject, topic or lesson.
 export async function PATCH(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const b = await body(req);
   const table = TABLE[b?.kind];
   const id = str(b?.id, 80);
@@ -146,7 +146,7 @@ export async function PATCH(req) {
 }
 
 export async function DELETE(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const b = await body(req);
   const table = TABLE[b?.kind];
   const id = str(b?.id, 80);

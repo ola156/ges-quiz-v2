@@ -5,7 +5,7 @@ import { isAdmin } from '../../../../lib/admin';
 const deny = () => NextResponse.json({ error: 'Wrong password' }, { status: 401 });
 
 export async function GET(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   const { data, error } = await db()
     .from('tutor_accounts')
     .select('clerk_id, active, free_session_used, created_at, members(display_name, email, centre)')
@@ -26,7 +26,7 @@ export async function GET(req) {
 
 // Switch a tutor on or off. Switching on also records when.
 export async function PATCH(req) {
-  if (!isAdmin(req)) return deny();
+  if (!(await isAdmin(req))) return deny();
   let body;
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Bad request' }, { status: 400 }); }
   const id = typeof body.id === 'string' && /^user_[A-Za-z0-9]{10,60}$/.test(body.id) ? body.id : null;

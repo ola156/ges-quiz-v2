@@ -5,7 +5,7 @@ import { getCourseBoard, getDeptBoard } from '../../../../lib/leaderboard';
 
 // Ready-to-paste WhatsApp post: the top 10 of a course plus the top departments.
 export async function GET(req) {
-  if (!isAdmin(req)) return NextResponse.json({ error: 'Wrong password' }, { status: 401 });
+  if (!(await isAdmin(req))) return NextResponse.json({ error: 'Wrong password' }, { status: 401 });
   const url = new URL(req.url);
   const course = (url.searchParams.get('course') || '').trim();
   if (!course) return NextResponse.json({ error: 'Course is required' }, { status: 400 });
