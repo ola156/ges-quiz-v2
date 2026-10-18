@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 // Accepts a code word, a single-set code, or a whole pasted link, and opens the right page.
-export default function CodeBox() {
+// variant="line" is the quiet one-line version used on the student home. The default keeps the old look.
+export default function CodeBox({ variant }) {
   const router = useRouter();
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -29,6 +30,35 @@ export default function CodeBox() {
       setError('Check your connection and try again.');
       setBusy(false);
     }
+  }
+
+  if (variant === 'line') {
+    return (
+      <form className="dh-code" onSubmit={go}>
+        <div className="dh-code-row">
+          <input
+            id="home-code"
+            className="dh-input"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="Enter a code or paste a link"
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck={false}
+            aria-label="Quiz code or link"
+          />
+          <button type="submit" className="dh-go" disabled={busy || !code.trim()} aria-label={busy ? 'Opening' : 'Open'}>
+            {busy ? (
+              <span className="dh-dots" aria-hidden="true">...</span>
+            ) : (
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14 M13 6l6 6-6 6" /></svg>
+            )}
+          </button>
+        </div>
+        {error && <p className="error small" role="alert">{error}</p>}
+      </form>
+    );
   }
 
   return (

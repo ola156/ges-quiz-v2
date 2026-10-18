@@ -112,10 +112,18 @@ export const publicQuestions = (sub) => sub.questions.map((q, i) => ({ i, q: q.q
 // A subtopic counts as done when the cards were read and the best quiz score is 60% or more.
 export const isDone = (p) => Boolean(p?.cards_done && p.total && p.best_score / p.total >= PASS_MARK);
 
+// One short line saying where the student is with a subtopic.
+export function statusText(p) {
+  if (isDone(p)) return `Done, best ${p.best_score}/${p.total}`;
+  if (p?.total) return `Best ${p.best_score}/${p.total}, keep going`;
+  if (p?.cards_done) return 'Cards read, quiz next';
+  return 'Not started';
+}
+
 export async function getProgress(clerkId) {
   const { data } = await db()
     .from('study_progress')
-    .select('subtopic_id, cards_done, best_score, total, attempts')
+    .select('subtopic_id, cards_done, best_score, total, attempts, updated_at')
     .eq('clerk_id', clerkId);
   return Object.fromEntries((data || []).map((r) => [r.subtopic_id, r]));
 }

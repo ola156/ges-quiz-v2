@@ -725,6 +725,98 @@ h2.sec-title { margin: 0; display: flex; align-items: center; gap: 10px; font-si
 .lp-hide-sm { }
 .tutor-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
+
+/* ================= STUDENT HOME ================= */
+/* Add this at the very end of app/globals.css. Everything here starts with dh-, so it cannot clash with anything else. */
+
+.dh-head { display: grid; gap: 6px; }
+.dh-head .muted { font-size: 0.95rem; }
+
+.dh-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-dark-muted);
+}
+.dh-block { display: grid; gap: 12px; margin-top: 12px; }
+.dh-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+/* Continue where you stopped: no box, just two lines and a round arrow */
+.dh-resume {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 4px;
+  margin-top: 4px;
+  border-top: 1px solid var(--surface-line);
+  border-bottom: 1px solid var(--surface-line);
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.dh-resume:hover { background: var(--wash); }
+.dh-resume-text { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.dh-resume-title { font-size: 1.3rem; line-height: 1.25; letter-spacing: -0.01em; color: var(--head); }
+.dh-resume-sub { color: var(--on-dark); font-size: 0.95rem; }
+.dh-resume-status { color: var(--on-dark-muted); font-size: 0.85rem; }
+.dh-resume-go {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: #fff;
+  transition: transform 0.15s;
+}
+.dh-resume:hover .dh-resume-go { transform: translateX(3px); }
+.dh-finished { padding: 16px 0; border-top: 1px solid var(--surface-line); border-bottom: 1px solid var(--surface-line); color: var(--on-dark); }
+
+/* one slim line for overall progress */
+.dh-meter { height: 4px; border-radius: 99px; background: var(--wash-strong); overflow: hidden; }
+.dh-meter span { display: block; height: 100%; border-radius: 99px; background: var(--blue); }
+
+/* code box: one line, an underline and a round arrow */
+.dh-code { display: grid; gap: 8px; }
+.dh-code-row { display: flex; align-items: center; gap: 12px; }
+.dh-code .dh-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 2px solid var(--surface-line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--on-dark);
+  font-family: var(--font-mono), monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+.dh-code .dh-input::placeholder { font-family: var(--font-heading), sans-serif; font-weight: 400; letter-spacing: normal; text-transform: none; color: var(--on-dark-muted); }
+.dh-code .dh-input:focus { outline: none; box-shadow: none; border-bottom-color: var(--link); }
+.dh-go {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--blue);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.dh-go:hover:not(:disabled) { background: var(--blue-dark); }
+.dh-go:active:not(:disabled) { transform: scale(0.96); }
+.dh-go:disabled { opacity: 0.35; cursor: not-allowed; }
+.dh-dots { font-weight: 700; letter-spacing: 1px; line-height: 1; }
+
 @media (max-width: 860px) {
   .lp-hero { grid-template-columns: 1fr; gap: 36px; padding: 28px 0 48px; }
   .lp-steps { grid-template-columns: 1fr; gap: 24px; }
@@ -742,3 +834,4 @@ h2.sec-title { margin: 0; display: flex; align-items: center; gap: 10px; font-si
 @media (max-width: 420px) {
   .lp-nav .lp-signin { display: none; }
 }
+

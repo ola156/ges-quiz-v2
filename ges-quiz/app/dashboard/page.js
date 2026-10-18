@@ -4,7 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import CodeBox from '../../components/CodeBox';
 import { getMember, getTutorAccount, tutorStatus, tutorReady, TRACKS } from '../../lib/member';
 import { schoolName } from '../../lib/schools';
-import { listSubjects } from '../../lib/study';
+import { listSubjects, getProgress, flatten, isDone, statusText } from '../../lib/study';
 import { db } from '../../lib/supabase';
 import { examState, lagos } from '../../lib/exam';
 
@@ -19,49 +19,133 @@ export default async function Dashboard() {
 
   return (
     <div className="stack">
-      {member.role === 'tutor' ? <TutorView member={member} userId={userId} /> : <StudentView member={member} />}
+      {member.role === 'tutor' ? <TutorView member={member} userId={userId} /> : <StudentView member={member} userId={userId} />}
     </div>
   );
 }
 
-async function StudentView({ member }) {
-  const hasStudy = (await listSubjects(member.track, member.school)).length > 0;
+// "2 days ago" for the line under the Continue row.
+function ago(iso) {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (!Number.isFinite(m) || m < 0) return '';
+  if (m < 2) return 'just now';
+  if (m < 60) return `${m} minutes ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
+  const d = Math.round(h / 24);
+  return d < 14 ? `${d} day${d === 1 ? '' : 's'} ago` : 'a while ago';
+}
+
+// Where the student should pick up: the subtopic touched most recently if it is not done yet.
+// If that one is done, the next unfinished one in the same subject. A new student starts at the first.
+function resumePoint(subjects, progress) {
+  const flat = subjects.flatMap((sj) => flatten(sj).map((s) => ({ sj, s, p: progress[s.id] })));
+  const last = flat
+    .filter((x) => x.p?.updated_at)
+    .sort((a, b) => new Date(b.p.updated_at) - new Date(a.p.updated_at))[0];
+  if (last && !isDone(last.p)) return { ...last, label: 'Continue where you stopped' };
+  if (last) {
+    const same = flat.filter((x) => x.sj.id === last.sj.id);
+    const at = same.indexOf(last);
+    const nxt = same.slice(at + 1).find((x) => !isDone(x.p)) || same.find((x) => !isDone(x.p));
+    if (nxt) return { ...nxt, label: 'Up next' };
+  }
+  const first = flat.find((x) => !isDone(x.p));
+  return first ? { ...first, label: last ? 'Up next' : 'Start here' } : null;
+}
+
+async function StudentView({ member, userId }) {
+  const subjects = await listSubjects(member.track, member.school);
+  const progress = subjects.length ? await getProgress(userId) : {};
   const track = TRACKS[member.track] || 'your exam';
   const detail = [schoolName(member.school), member.department, member.class_level ? `${member.class_level} level` : null]
     .filter(Boolean)
     .join(', ');
+
+  const rows = subjects.map((sj) => {
+    const flat = flatten(sj);
+    return { sj, total: flat.length, done: flat.filter((s) => isDone(progress[s.id])).length };
+  });
+  const totalAll = rows.reduce((n, r) => n + r.total, 0);
+  const doneAll = rows.reduce((n, r) => n + r.done, 0);
+  const pct = totalAll ? Math.round((doneAll / totalAll) * 100) : 0;
+  const resume = subjects.length ? resumePoint(subjects, progress) : null;
+
   return (
     <>
-      <h1>{member.display_name ? `Welcome, ${member.display_name}` : 'Welcome'}</h1>
+      <header className="dh-head">
+        <h1>{member.display_name ? `Welcome, ${member.display_name}` : 'Welcome'}</h1>
+        <p className="muted">Preparing for {track}{detail ? `. ${detail}` : ''}</p>
+      </header>
 
-      <section className="card stack tight">
-        <h2 className="card-h">Preparing for {track}</h2>
-        {detail && <p className="muted small">{detail}</p>}
-        <Link href="/profile" className="text-link">View profile</Link>
-      </section>
+      {subjects.length > 0 ? (
+        <>
+          {resume ? (
+            <Link href={`/study/${resume.sj.exam}/${resume.sj.id}/${resume.s.id}`} className="dh-resume">
+              <span className="dh-resume-text">
+                <span className="dh-label">{resume.label}</span>
+                <strong className="dh-resume-title">{resume.s.title}</strong>
+                <span className="dh-resume-sub">{resume.sj.name}. {resume.s.topicTitle}</span>
+                <span className="dh-resume-status">
+                  {statusText(resume.p)}
+                  {resume.p?.updated_at && resume.label !== 'Up next' ? `. Last studied ${ago(resume.p.updated_at)}` : ''}
+                </span>
+              </span>
+              <span className="dh-resume-go" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14 M13 6l6 6-6 6" /></svg>
+              </span>
+            </Link>
+          ) : (
+            <p className="dh-finished">You have finished every subtopic. Open any subject below to revise.</p>
+          )}
 
-      {member.track === 'university' ? (
-        <section className="card stack tight">
-          <h2 className="card-h">Practice sets</h2>
-          <p className="muted small">Course quizzes with instant corrections and leaderboards.</p>
-          <Link href="/practice" className="btn">Open practice sets</Link>
-        </section>
-      ) : hasStudy ? (
-        <section className="card stack tight">
-          <h2 className="card-h">Study {track}</h2>
-          <p className="muted small">Short notes, then a quiz for every topic. Corrections explain each answer.</p>
-          <Link href="/study" className="btn">Open study</Link>
-        </section>
+          <section className="dh-block">
+            <div className="dh-block-head">
+              <span className="dh-label">Your progress</span>
+              <span className="muted small">{doneAll} of {totalAll} subtopics done</span>
+            </div>
+            <div className="dh-meter" role="progressbar" aria-label="Overall progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+              <span style={{ width: `${pct}%` }} />
+            </div>
+            <ul className="slist">
+              {rows.map(({ sj, total, done }) => (
+                <li key={sj.id}>
+                  <Link href={`/study/${sj.exam}/${sj.id}`} className="srow go">
+                    <span className="t">
+                      {sj.name}
+                      <small>{done === total ? 'All subtopics done' : `${done} of ${total} subtopics done`}</small>
+                    </span>
+                    {done === total ? <span className="tick" aria-label="Complete">&#10003;</span> : <span className="m">{Math.round((done / total) * 100)}%</span>}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
       ) : (
-        <section className="card stack tight">
-          <h2 className="card-h">{track} study is being prepared</h2>
-          <p className="muted small">It is not ready yet. If your tutor gave you a code or link, you can use it below.</p>
+        <section className="dh-block">
+          <span className="dh-label">Study</span>
+          <p className="muted">{track} study is not ready yet. If your tutor gave you a code or link, you can use it below.</p>
         </section>
       )}
 
-      <section className="card stack tight">
-        <h2 className="card-h">Have a code?</h2>
-        <CodeBox />
+      <section className="dh-block">
+        <span className="dh-label">Practice</span>
+        <ul className="slist">
+          <li>
+            <Link href="/practice" className="srow go">
+              <span className="t">
+                Practice quizzes
+                <small>{member.track === 'university' ? 'Course quizzes with instant corrections and leaderboards' : `Public quizzes for ${track}, with corrections`}</small>
+              </span>
+            </Link>
+          </li>
+        </ul>
+      </section>
+
+      <section className="dh-block">
+        <label className="dh-label" htmlFor="home-code">Have a code?</label>
+        <CodeBox variant="line" />
       </section>
     </>
   );
