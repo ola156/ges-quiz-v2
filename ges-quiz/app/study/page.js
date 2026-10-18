@@ -20,7 +20,7 @@ export default async function StudyHome() {
 
   return (
     <div className="stack">
-        <h1>Study {TRACKS[track] || ''}</h1>
+        <h1>{ track === 'university' ? ' Available Courses' : 'Available Subjects' } </h1>
         {!subjects.length ? (
           <section className="card stack tight">
             <h2 className="card-h">{TRACKS[track] || 'Your exam'} study is being prepared</h2>

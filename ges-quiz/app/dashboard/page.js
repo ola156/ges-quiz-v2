@@ -75,7 +75,7 @@ async function StudentView({ member, userId }) {
     <>
       <header className="dh-head">
         <h1>{member.display_name ? `Welcome, ${member.display_name}` : 'Welcome'}</h1>
-        <p className="muted">Preparing for {track}{detail ? `. ${detail}` : ''}</p>
+        <p className="muted"> {track === 'university' ? 'Preparing for' : 'Enrolled At'} {detail ? `: ${detail}` : ''}</p>
       </header>
 
       {subjects.length > 0 ? (

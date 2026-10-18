@@ -68,7 +68,7 @@ export default function PracticeList({ items, label, signedIn, track }) {
         <section key={name}>
           <div className="pl-group">
             <h2>{name}</h2>
-            {name !== 'Other sets' && <Link href={`/course/${encodeURIComponent(name)}`}>Course page</Link>}
+           
           </div>
           <ul className="pl-list">
             {list.map((x) => (
