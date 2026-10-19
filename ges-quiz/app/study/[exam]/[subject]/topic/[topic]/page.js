@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
+import MathText from '../../../../../../components/MathText';
 import { getProgress, getSubject, isDone } from '../../../../../../lib/study';
 import { getMember } from '../../../../../../lib/member';
 
@@ -20,14 +21,14 @@ export default async function TopicPage({ params }) {
 
   return (
     <div className="stack">
-      <Link href={`/study/${exam}/${id}`} className="back">Back to {subject.name}</Link>
-      <h1>{t.title}</h1>
+      <Link href={`/study/${exam}/${id}`} className="back">Back to <MathText text={subject.name} /></Link>
+      <h2><MathText text={t.title} /></h2>
       <ol className="slist">
         {t.subtopics.map((x, k) => (
           <li key={x.id}>
             <Link href={`/study/${exam}/${id}/${x.id}`} className="srow go">
               <span className="n">{k + 1}</span>
-              <span className="t">{x.title}</span>
+              <span className="t"><MathText text={x.title} /></span>
               {isDone(progress[x.id]) && <span className="tick" aria-label="Done">&#10003;</span>}
             </Link>
           </li>

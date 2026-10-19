@@ -241,7 +241,7 @@ export default function StudyRunner({ subtopicId, cards, questions, initial, bac
       <section className="stack">
         <div className="card stack tight">
           <span className="muted small">{c + 1} of {cards.length}</span>
-          <h2 className="card-h">{card.t}</h2>
+          <h2 className="card-h"><Rich text={card.t} /></h2>
           <ul style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 10, color: 'var(--ink)', lineHeight: 1.55 }}>
             {card.p.map((line, i) => <li key={i}><Rich text={line} /></li>)}
           </ul>
@@ -344,7 +344,7 @@ export default function StudyRunner({ subtopicId, cards, questions, initial, bac
               ? 'Well done. This lesson counts as done once you have read the cards, and you have.'
               : 'Below 60%, so this lesson is not done yet. Read the cards again and retry. Your best score is kept.'}
         </p>
-        {goNext ? <Link href={next.href} className="btn">Next: {next.title}</Link> : <button type="button" className="btn" onClick={openSetup}>Try again</button>}
+        {goNext ? <Link href={next.href} className="btn">Next: <Rich text={next.title} /></Link> : <button type="button" className="btn" onClick={openSetup}>Try again</button>}
         <div className="slist">
           {goNext && (
             <div className="srow go" role="button" tabIndex={0} onClick={openSetup} onKeyDown={(e) => e.key === 'Enter' && openSetup()}><span className="t">Try again</span></div>

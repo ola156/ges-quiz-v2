@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import StudyRunner from '../../../../../components/StudyRunner';
+import MathText from '../../../../../components/MathText';
 import { findSubtopic, getProgress, publicQuestions } from '../../../../../lib/study';
 import { getMember } from '../../../../../lib/member';
 
@@ -23,8 +24,8 @@ export default async function SubtopicPage({ params }) {
 
   return (
     <div className="stack">
-        <Link href={topicHref} className="back">Back to {sub.topicTitle}</Link>
-        <h1>{sub.title}</h1>
+        <Link href={topicHref} className="back">Back to <MathText text={sub.topicTitle} /></Link>
+        <h2><MathText text={sub.title} /></h2>
         <StudyRunner
           subtopicId={sub.id}
           cards={sub.cards}

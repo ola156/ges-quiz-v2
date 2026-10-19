@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import { getMember, TRACKS } from '../../lib/member';
+import MathText from '../../components/MathText';
 import { flatten, getProgress, isDone, listSubjects } from '../../lib/study';
 
 export const dynamic = 'force-dynamic';
@@ -41,7 +42,7 @@ export default async function StudyHome() {
                 <li key={s.id}>
                   <Link href={`/study/${s.exam}/${s.id}`} className="srow go">
                     <span className="n">{k + 1}</span>
-                    <span className="t">{s.name}{s.blurb ? <small>{s.blurb}</small> : null}</span>
+                    <span className="t"><MathText text={s.name} />{s.blurb ? <small><MathText text={s.blurb} /></small> : null}</span>
                     <span className="m">{done}/{all.length}</span>
                   </Link>
                 </li>

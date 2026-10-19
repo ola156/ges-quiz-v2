@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { parseStudy, serializeStudy, STUDY_PROMPT } from '../lib/studyparse';
 import { SCHOOLS } from '../lib/schools';
+import Rich from './Rich';
+import { plainMath } from './MathParts';
 
 const LEVELS = [
   { id: 'jamb', label: 'JAMB' },
@@ -65,7 +67,7 @@ export default function AdminStudy({ pw, flash, mode, onMode }) {
   }
 
   async function remove(kind, id, label) {
-    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete ${plainMath(label)}? This cannot be undone.`)) return;
     await call('DELETE', { kind, id }, 'Deleted');
   }
 
@@ -101,7 +103,7 @@ export default function AdminStudy({ pw, flash, mode, onMode }) {
         <label className="field">Subject
           <select value={f.subjectId} disabled={Boolean(f.subtopicId)} onChange={(e) => setF({ ...f, subjectId: e.target.value, topicId: '' })}>
             <option value="">New subject</option>
-            {forLevel.map((s) => <option key={s.dbId} value={s.dbId}>{s.name}</option>)}
+            {forLevel.map((s) => <option key={s.dbId} value={s.dbId}>{plainMath(s.name)}</option>)}
           </select>
         </label>
         {!f.subjectId && (
@@ -118,7 +120,7 @@ export default function AdminStudy({ pw, flash, mode, onMode }) {
         <label className="field">Topic
           <select value={f.topicId} disabled={Boolean(f.subtopicId)} onChange={(e) => set('topicId', e.target.value)}>
             <option value="">New topic</option>
-            {(subject?.topics || []).map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+            {(subject?.topics || []).map((t) => <option key={t.id} value={t.id}>{plainMath(t.title)}</option>)}
           </select>
         </label>
         {!f.topicId && (
@@ -140,6 +142,31 @@ export default function AdminStudy({ pw, flash, mode, onMode }) {
           <p className={parsed.errors.length ? 'error' : 'hint'}>
             {parsed.errors.length ? parsed.errors[0] : `${parsed.cards.length} cards, ${parsed.questions.length} questions`}
           </p>
+        )}
+        {parsed && !parsed.errors.length && (
+          <details className="stack tight">
+            <summary>Preview how students will see it</summary>
+            <div className="stack tight" style={{ paddingTop: 8 }}>
+              {f.title.trim() && <h3 className="card-h"><Rich text={f.title} /></h3>}
+              {parsed.cards.map((c, i) => (
+                <div key={i} className="card stack tight">
+                  <h4 className="card-h"><Rich text={c.t} /></h4>
+                  <ul style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 6, lineHeight: 1.55 }}>
+                    {c.p.map((line, j) => <li key={j}><Rich text={line} /></li>)}
+                  </ul>
+                </div>
+              ))}
+              {parsed.questions.map((q, i) => (
+                <div key={i} className="card stack tight">
+                  <p className="qtext"><b>{i + 1}.</b> <Rich text={q.q} /></p>
+                  {q.o.map((o, k) => (
+                    <p key={k} className="small" style={{ margin: 0, fontWeight: k === q.a ? 700 : 400 }}>{'ABCD'[k]}. <Rich text={o} />{k === q.a ? ' (correct)' : ''}</p>
+                  ))}
+                  {q.why && <p className="small muted">Why: <Rich text={q.why} /></p>}
+                </div>
+              ))}
+            </div>
+          </details>
         )}
         {err && <p className="error">{err}</p>}
 
@@ -180,7 +207,7 @@ export default function AdminStudy({ pw, flash, mode, onMode }) {
         <section key={s.dbId} className="card stack tight">
           <div className="tutor-row">
             <div>
-              <strong>{s.name}</strong>
+              <strong><Rich text={s.name} /></strong>
               <p className="muted small">{levelName(s.exam)}{s.school ? `, ${SCHOOLS.find((x) => x.id === s.school)?.short || s.school}` : schoolLevelName(s.exam)}{s.published ? '' : ', hidden'}</p>
             </div>
             <div className="row">
@@ -190,12 +217,12 @@ export default function AdminStudy({ pw, flash, mode, onMode }) {
           </div>
           {s.topics.map((t) => (
             <details key={t.id}>
-              <summary><strong>{t.title}</strong> <span className="muted small">{t.subtopics.length} lessons</span></summary>
+              <summary><strong><Rich text={t.title} /></strong> <span className="muted small">{t.subtopics.length} lessons</span></summary>
               <div className="stack tight" style={{ paddingTop: 8 }}>
                 {t.subtopics.map((sub) => (
                   <div key={sub.id} className="tutor-row">
                     <div>
-                      <span>{sub.title}</span>
+                      <span><Rich text={sub.title} /></span>
                       <p className="muted small">{sub.cards.length} cards, {sub.questions.length} questions{sub.published ? '' : ', hidden'}</p>
                     </div>
                     <div className="row">

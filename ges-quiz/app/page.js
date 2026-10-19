@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import SiteHeader from '../components/SiteHeader';
 import CodeBox from '../components/CodeBox';
+import HelpLink from '../components/HelpLink';
 import { PARTNER } from '../lib/brand';
 
 export const dynamic = 'force-dynamic';
@@ -152,7 +153,10 @@ export default function Landing() {
       </section>
 
       <footer className="lp-foot">
-        <span>{PARTNER}</span>
+        <div className="lp-foot-left">
+          <span>{PARTNER}</span>
+          <HelpLink where="in-foot" />
+        </div>
         <span className="lp-foot-links">
           <Link href="/sign-in">Sign in</Link>
           <Link href="/practice">Practice quizzes</Link>

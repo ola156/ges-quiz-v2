@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import Bar from '../../../../components/Bar';
+import MathText from '../../../../components/MathText';
 import { flatten, getProgress, getSubject, isDone } from '../../../../lib/study';
 import { getMember } from '../../../../lib/member';
 
@@ -25,13 +26,13 @@ export default async function SubjectPage({ params }) {
   return (
     <div className="stack">
       <Link href="/study" className="back">Back to study</Link>
-      <h1>{subject.name}</h1>
+      <h1><MathText text={subject.name} /></h1>
       <div className="stack tight">
         <Bar value={(done / all.length) * 100} label="Overall progress" />
         <span className="sbar-note">{done} of {all.length} lessons done</span>
       </div>
       {resume && (
-        <Link href={`/study/${exam}/${id}/${resume.id}`} className="btn">{done ? 'Continue' : 'Start'}: {resume.title}</Link>
+        <Link href={`/study/${exam}/${id}/${resume.id}`} className="btn">{done ? 'Continue' : 'Start'}: <MathText text={resume.title} /></Link>
       )}
 
       <ol className="slist">
@@ -39,7 +40,7 @@ export default async function SubjectPage({ params }) {
           <li key={t.id}>
             <Link href={`/study/${exam}/${id}/topic/${t.id}`} className="srow go">
               <span className="n">{k + 1}</span>
-              <span className="t">{t.title}</span>
+              <span className="t"><MathText text={t.title} /></span>
             </Link>
           </li>
         ))}

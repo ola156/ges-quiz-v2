@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { UserButton } from '@clerk/nextjs';
 import NavFrame from './NavFrame';
 import ThemeToggle from './ThemeToggle';
+import HelpLink from './HelpLink';
 import { getMember } from '../lib/member';
 
 const HOME = 'M3 11l9-8 9 8 M5 10v10h14V10';
@@ -11,12 +12,13 @@ const LIST = 'M4 6h16 M4 12h16 M4 18h16';
 const PLUS = 'M12 5v14 M5 12h14';
 const USER = 'M12 12a4 4 0 100-8 4 4 0 000 8z M4 21c0-4 4-6 8-6s8 2 8 6';
 const CHART = 'M4 20V10 M10 20V4 M16 20v-8 M22 20H2';
+const TARGET = 'M12 21a9 9 0 100-18 9 9 0 000 18z M12 16a4 4 0 100-8 4 4 0 000 8z M12 12h.01';
 
 const ITEMS = {
   student: [
     { id: 'home', href: '/dashboard', label: 'Home', icon: HOME, exact: true },
     { id: 'study', href: '/study', label: 'Study', icon: BOOK },
-    { id: 'practice', href: '/practice', label: 'Practice', icon: LIST },
+    { id: 'practice', href: '/practice', label: 'Practice', icon: TARGET },
     { id: 'profile', href: '/profile', label: 'Profile', icon: USER },
   ],
   tutor: [
@@ -39,6 +41,7 @@ export default async function AppFrame({ children }) {
     <NavFrame
       items={ITEMS[role]}
       brand={brand}
+      footer={<HelpLink where="in-menu" />}
       tools={<><ThemeToggle /><UserButton afterSignOutUrl="/" /></>}
     >
       {children}
