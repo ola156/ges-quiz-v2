@@ -18,10 +18,13 @@ export default async function StudyHome() {
   const track = member.track;
   const subjects = await listSubjects(track, member.school);
   const progress = await getProgress(userId);
+  const number = String(process.env.NEXT_PUBLIC_CONTACT_WHATSAPP || '').replace(/\D/g, '');
+  const text = `Hello, I would like to request a course on Instrict Quizmate study: `;
+  const wa = number ? `https://wa.me/${number}?text=${encodeURIComponent(text)}` : '';
 
   return (
     <div className="stack">
-        <h1>{ track === 'university' ? ' Available Courses' : 'Available Subjects' } </h1>
+        <h1>Study {TRACKS[track] || ''}</h1>
         {!subjects.length ? (
           <section className="card stack tight">
             <h2 className="card-h">{TRACKS[track] || 'Your exam'} study is being prepared</h2>
@@ -50,6 +53,12 @@ export default async function StudyHome() {
             })}
           </ol>
         )}
+
+        <section className="card stack tight">
+          <h2 className="card-h">Want your course added?</h2>
+          <p className="muted small">Tell us the course or subject you want to study here and we will work on adding it.</p>
+          {wa ? <a className="btn ghost" href={wa} target="_blank" rel="noreferrer">Reach out on WhatsApp</a> : <p className="small">Message us and ask for your course.</p>}
+        </section>
     </div>
   );
 }

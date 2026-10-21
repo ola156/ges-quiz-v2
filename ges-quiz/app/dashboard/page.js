@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import CodeBox from '../../components/CodeBox';
+import MathText from '../../components/MathText';
 import { getMember, getTutorAccount, tutorStatus, tutorReady, TRACKS } from '../../lib/member';
 import { schoolName } from '../../lib/schools';
 import { listSubjects, getProgress, flatten, isDone, statusText } from '../../lib/study';
@@ -66,10 +67,24 @@ async function StudentView({ member, userId }) {
     const flat = flatten(sj);
     return { sj, total: flat.length, done: flat.filter((s) => isDone(progress[s.id])).length };
   });
-  const totalAll = rows.reduce((n, r) => n + r.total, 0);
-  const doneAll = rows.reduce((n, r) => n + r.done, 0);
-  const pct = totalAll ? Math.round((doneAll / totalAll) * 100) : 0;
   const resume = subjects.length ? resumePoint(subjects, progress) : null;
+
+  // The course the student worked on last. Falls back to the first course for a new student.
+  let lastId = null;
+  let lastAt = 0;
+  for (const sj of subjects) {
+    for (const s of flatten(sj)) {
+      const t = progress[s.id]?.updated_at ? new Date(progress[s.id].updated_at).getTime() : 0;
+      if (t > lastAt) { lastAt = t; lastId = sj.id; }
+    }
+  }
+  const focusId = resume?.sj.id ?? lastId ?? subjects[0]?.id;
+  const focus = rows.find((r) => r.sj.id === focusId) || rows[0];
+  const pct = focus && focus.total ? Math.round((focus.done / focus.total) * 100) : 0;
+  // Only two courses on the dashboard: the last one studied, then the next one still to do.
+  const others = rows.filter((r) => r !== focus);
+  const next = others.find((r) => r.done < r.total) || others[0];
+  const shown = focus ? [focus, next].filter(Boolean) : [];
 
   return (
     <>
@@ -84,8 +99,8 @@ async function StudentView({ member, userId }) {
             <Link href={`/study/${resume.sj.exam}/${resume.sj.id}/${resume.s.id}`} className="dh-resume">
               <span className="dh-resume-text">
                 <span className="dh-label">{resume.label}</span>
-                <strong className="dh-resume-title">{resume.s.title}</strong>
-                <span className="dh-resume-sub">{resume.sj.name}. {resume.s.topicTitle}</span>
+                <strong className="dh-resume-title"><MathText text={resume.s.title} /></strong>
+                <span className="dh-resume-sub"><MathText text={resume.sj.name} />. <MathText text={resume.s.topicTitle} /></span>
                 <span className="dh-resume-status">
                   {statusText(resume.p)}
                   {resume.p?.updated_at && resume.label !== 'Up next' ? `. Last studied ${ago(resume.p.updated_at)}` : ''}
@@ -101,18 +116,18 @@ async function StudentView({ member, userId }) {
 
           <section className="dh-block">
             <div className="dh-block-head">
-              <span className="dh-label">Your progress</span>
-              <span className="muted small">{doneAll} of {totalAll} subtopics done</span>
+              <span className="dh-label">{focus ? <MathText text={focus.sj.name} /> : 'Your progress'}</span>
+              <span className="muted small">{focus?.done ?? 0} of {focus?.total ?? 0} subtopics done</span>
             </div>
-            <div className="dh-meter" role="progressbar" aria-label="Overall progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+            <div className="dh-meter" role="progressbar" aria-label="Course progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
               <span style={{ width: `${pct}%` }} />
             </div>
             <ul className="slist">
-              {rows.map(({ sj, total, done }) => (
+              {shown.map(({ sj, total, done }) => (
                 <li key={sj.id}>
                   <Link href={`/study/${sj.exam}/${sj.id}`} className="srow go">
                     <span className="t">
-                      {sj.name}
+                      <MathText text={sj.name} />
                       <small>{done === total ? 'All subtopics done' : `${done} of ${total} subtopics done`}</small>
                     </span>
                     {done === total ? <span className="tick" aria-label="Complete">&#10003;</span> : <span className="m">{Math.round((done / total) * 100)}%</span>}
@@ -120,6 +135,7 @@ async function StudentView({ member, userId }) {
                 </li>
               ))}
             </ul>
+            {rows.length > 2 && <Link href="/study" className="text-link">See all {rows.length} subjects</Link>}
           </section>
         </>
       ) : (

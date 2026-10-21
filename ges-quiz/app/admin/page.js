@@ -5,6 +5,7 @@ import { parseQuestions, AI_PROMPT } from '../../lib/parse';
 import Rich from '../../components/Rich';
 import AdminStudy from '../../components/AdminStudy';
 import AdminStudents from '../../components/AdminStudents';
+import AdminReaders from '../../components/AdminReaders';
 import NavFrame from '../../components/NavFrame';
 import ThemeToggle from '../../components/ThemeToggle';
 
@@ -56,7 +57,7 @@ export default function Admin() {
   const { signOut } = useClerk();
   const [pw, setPw] = useState('');
   const [authed, setAuthed] = useState(false);
-  const [view, setView] = useState('overview'); // overview | add | manage | newcollection | collections | newlesson | study | students | tutors
+  const [view, setView] = useState('overview'); // overview | add | manage | newcollection | collections | newlesson | study | readers | students | tutors
   const [quizzes, setQuizzes] = useState([]);
   const [creators, setCreators] = useState([]);
   const [tutors, setTutors] = useState([]);
@@ -592,6 +593,7 @@ export default function Admin() {
     { id: 'manage', label: 'Quizzes', icon: 'M4 6h16 M4 12h16 M4 18h16', count: counts.all },
     { id: 'collections', label: 'Collections', icon: 'M3 7l9-4 9 4-9 4-9-4z M3 12l9 4 9-4 M3 17l9 4 9-4', count: collections.length },
     { id: 'study', label: 'Study content', icon: 'M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z M4 21V5 M9 7h6' },
+    { id: 'readers', label: 'Readers', icon: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M12 15a3 3 0 100-6 3 3 0 000 6z' },
     { id: 'students', label: 'Students', icon: 'M12 12a4 4 0 100-8 4 4 0 000 8z M4 21c0-4 4-6 8-6s8 2 8 6' },
     { id: 'tutors', label: 'Tutors', icon: 'M12 3l10 5-10 5L2 8z M6 10.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-5.5', count: waiting.length || undefined, alert: waiting.length > 0 },
   ];
@@ -969,6 +971,8 @@ export default function Admin() {
       {(view === 'study' || view === 'newlesson') && (
         <AdminStudy pw={pw} flash={flash} mode={view === 'study' ? 'list' : 'form'} onMode={(m) => go(m === 'form' ? 'newlesson' : 'study')} />
       )}
+
+      {view === 'readers' && <AdminReaders pw={pw} />}
 
       {view === 'students' && <AdminStudents pw={pw} flash={flash} />}
 
