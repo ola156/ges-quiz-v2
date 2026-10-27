@@ -29,6 +29,15 @@ export async function GET(req) {
     if (p === MAX_PAGES - 1) truncated = true;
   }
 
+  // Which subject JAMB students want built next.
+  const tally = new Map();
+  for (let p = 0; p < MAX_PAGES; p++) {
+    const { data } = await db().from('subject_votes').select('subject').order('created_at').range(p * PAGE, p * PAGE + PAGE - 1);
+    for (const v of data || []) tally.set(v.subject, (tally.get(v.subject) || 0) + 1);
+    if ((data || []).length < PAGE) break;
+  }
+  const votes = [...tally.entries()].map(([subject, n]) => ({ subject, votes: n })).sort((a, b) => b.votes - a.votes).slice(0, 20);
+
   const { data: tree } = await db()
     .from('study_subjects')
     .select('id, exam, name, study_topics(id, title, study_subtopics(id, title))');
@@ -80,6 +89,7 @@ export async function GET(req) {
   return NextResponse.json({
     days,
     counts,
+    votes,
     truncated,
     subjects: [...bySubject.values()]
       .map((s) => ({ name: s.name, exam: s.exam, readers: s.who.size, lessons: s.lessons.size, completed: s.done }))

@@ -4,6 +4,7 @@ import { db } from '../../../../lib/supabase';
 import { isAdmin } from '../../../../lib/admin';
 import { adminTree } from '../../../../lib/study';
 import { parseStudy } from '../../../../lib/studyparse';
+import { importLessons } from '../../../../lib/studyimport';
 import { isSchool } from '../../../../lib/schools';
 import chemistry from '../../../../content/jamb-chemistry';
 
@@ -111,6 +112,30 @@ async function seed() {
   return NextResponse.json({ ok: true });
 }
 
+// Adds many lessons from one file. The page sends them a few at a time.
+async function bulk(b) {
+  if (!Array.isArray(b.lessons) || !b.lessons.length) return bad('No lessons to add');
+  if (b.lessons.length > 15) return bad('Send at most 15 lessons at a time');
+  const out = await importLessons(b.lessons, { dryRun: b.dryRun === true, published: b.published === true });
+  return NextResponse.json({ ok: true, ...out });
+}
+
+// Shows lessons (and their subjects) that were imported hidden.
+async function showMany(b) {
+  const ids = Array.isArray(b.lessonIds) ? b.lessonIds.map((x) => str(x, 80)).filter(Boolean).slice(0, 300) : [];
+  const subjects = Array.isArray(b.subjectIds) ? b.subjectIds.map((x) => str(x, 80)).filter(Boolean).slice(0, 50) : [];
+  if (!ids.length && !subjects.length) return bad('Nothing to show');
+  if (ids.length) {
+    const { error } = await db().from('study_subtopics').update({ published: true }).in('id', ids);
+    if (error) return bad(error.message, 500);
+  }
+  if (subjects.length) {
+    const { error } = await db().from('study_subjects').update({ published: true }).in('id', subjects);
+    if (error) return bad(error.message, 500);
+  }
+  return NextResponse.json({ ok: true });
+}
+
 // Students read study content from a server cache. Any change here refreshes it.
 const fresh = (res) => {
   if (res.status < 300) revalidateTag('study');
@@ -123,6 +148,8 @@ export async function POST(req) {
   if (!b) return bad('Bad request');
   if (b.action === 'seed') return fresh(await seed());
   if (b.action === 'save') return fresh(await save(b));
+  if (b.action === 'bulk') return fresh(await bulk(b));
+  if (b.action === 'show') return fresh(await showMany(b));
   return bad('Bad request');
 }
 

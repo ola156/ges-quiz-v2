@@ -5,7 +5,6 @@ import { SCHOOLS, schoolName } from '../lib/schools';
 
 const TRACKS = [
   { id: 'jamb', title: 'JAMB', note: 'UTME practice and mock exams' },
-  { id: 'waec', title: 'WAEC', note: 'SSCE and GCE preparation' },
   { id: 'post_utme', title: 'Post-UTME', note: 'Screening for the school you applied to' },
   { id: 'university', title: 'University', note: 'Course quizzes for your department' },
 ];
@@ -62,8 +61,12 @@ export default function Onboarding({ startRole, fullName, initial }) {
   const [schools, setSchools] = useState(initial?.schools || []);
   const needsSchools = tracks.some((t) => NEEDS_SCHOOL.includes(t));
   const toggleTrack = (id) => setTracks((all) => (all.includes(id) ? all.filter((t) => t !== id) : [...all, id]));
-  // student: track -> details (only when a school is needed). tutor: one form.
-  const [stage, setStage] = useState(startRole === 'student' && initial?.track && NEEDS_SCHOOL.includes(initial.track) ? 'details' : 'main');
+  // student: name (only when we do not have one yet) -> track -> details (only when a school is needed). tutor: one form.
+  const [stage, setStage] = useState(
+    startRole === 'student' && !displayName.trim() ? 'name'
+      : startRole === 'student' && initial?.track && NEEDS_SCHOOL.includes(initial.track) ? 'details'
+      : 'main'
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -90,7 +93,7 @@ export default function Onboarding({ startRole, fullName, initial }) {
     setTrack(id);
     setError('');
     if (NEEDS_SCHOOL.includes(id)) setStage('details');
-    else save({ role: 'student', track: id });
+    else save({ role: 'student', track: id, displayName });
   }
 
   function back() {
@@ -104,7 +107,7 @@ export default function Onboarding({ startRole, fullName, initial }) {
       <section className="panel stack">
         <h1>How will you use Instrict Quizmate?</h1>
         <div className="stack tight">
-          <button type="button" className="pick" onClick={() => { setRole('student'); setStage('main'); }}>
+          <button type="button" className="pick" onClick={() => { setRole('student'); setStage(displayName.trim() ? 'main' : 'name'); }}>
             <strong>I am a student</strong>
             <span>Practice for an exam and track how you are doing</span>
           </button>
@@ -158,12 +161,38 @@ export default function Onboarding({ startRole, fullName, initial }) {
     );
   }
 
+  if (stage === 'name') {
+    return (
+      <form
+        className="panel stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!displayName.trim()) return;
+          if (initial?.track) {
+            // Already set up before and only the name was missing, so save it with what they chose earlier.
+            save({ role: 'student', track: initial.track, school, department, classLevel, displayName });
+            return;
+          }
+          setStage('main');
+        }}>
+        <button type="button" className="back-btn" onClick={back}>Back</button>
+        <h1>What should we call you?</h1>
+        <p className="muted">Your tutor and your results show this name.</p>
+        <label>Your full name
+          <input required maxLength={80} autoComplete="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+        </label>
+        {error && <p className="error" role="alert">{error}</p>}
+        <button className="btn" disabled={busy || !displayName.trim()}>{busy ? 'Saving...' : 'Continue'}</button>
+      </form>
+    );
+  }
+
   if (stage === 'details') {
     const isUni = track === 'university';
     return (
       <form
         className="panel stack"
-        onSubmit={(e) => { e.preventDefault(); save({ role: 'student', track, school, department, classLevel }); }}>
+        onSubmit={(e) => { e.preventDefault(); save({ role: 'student', track, school, department, classLevel, displayName }); }}>
         <button type="button" className="back-btn" onClick={back}>Back</button>
         <h1>{isUni ? 'Which university?' : 'Which school did you apply to?'}</h1>
         <div className="stack tight">

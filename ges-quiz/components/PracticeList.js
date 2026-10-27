@@ -20,7 +20,7 @@ const CSS = `
 .pl-code summary { cursor: pointer; font-weight: 600; color: var(--link); }
 `;
 
-export default function PracticeList({ items, label, signedIn, track }) {
+export default function PracticeList({ items, label, signedIn, track, custom }) {
   const [q, setQ] = useState('');
 
   const groups = useMemo(() => {
@@ -45,6 +45,21 @@ export default function PracticeList({ items, label, signedIn, track }) {
       <h1>Practice</h1>
       {label && <p className="muted small">Public quizzes for {label}.</p>}
 
+      {custom && (
+        <ul className="slist">
+          <li>
+            <Link href="/practice/custom" className="srow go">
+              <span className="t">Custom practice<small>Random questions. Pick the subject, how many, study or exam mode, and a timer.</small></span>
+            </Link>
+          </li>
+          <li>
+            <Link href="/practice/leaderboard" className="srow go">
+              <span className="t">Leaderboard<small>See who is practising the most</small></span>
+            </Link>
+          </li>
+        </ul>
+      )}
+
       <div className="pl-search">
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by course, title or topic" aria-label="Search practice sets" />
         {q && <button type="button" onClick={() => setQ('')} aria-label="Clear search">&times;</button>}
@@ -68,7 +83,7 @@ export default function PracticeList({ items, label, signedIn, track }) {
         <section key={name}>
           <div className="pl-group">
             <h2>{name}</h2>
-           
+            {name !== 'Other sets' && <Link href={`/course/${encodeURIComponent(name)}`}>Course page</Link>}
           </div>
           <ul className="pl-list">
             {list.map((x) => (

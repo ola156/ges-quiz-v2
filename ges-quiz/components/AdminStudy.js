@@ -1,13 +1,13 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { parseStudy, serializeStudy, STUDY_PROMPT } from '../lib/studyparse';
+import { splitLessons } from '../lib/studybulk';
 import { SCHOOLS } from '../lib/schools';
 import Rich from './Rich';
 import { plainMath } from './MathParts';
 
 const LEVELS = [
   { id: 'jamb', label: 'JAMB' },
-  { id: 'waec', label: 'WAEC' },
   { id: 'post_utme', label: 'Post-UTME' },
   { id: 'university', label: 'University' },
 ];
@@ -23,6 +23,58 @@ export default function AdminStudy({ pw, flash, mode, onMode }) {
   const [err, setErr] = useState('');
   const [showPrompt, setShowPrompt] = useState(false);
   const headers = { 'Content-Type': 'application/json', 'x-admin-password': pw };
+
+  // Bulk import: read files, check them here first, then send a few lessons at a time.
+  const [bulk, setBulk] = useState({ lessons: [], errors: [] });
+  const [bulkHidden, setBulkHidden] = useState(true);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkLog, setBulkLog] = useState(null);
+
+  async function chooseFiles(e) {
+    const files = [...(e.target.files || [])];
+    e.target.value = '';
+    const lessons = [];
+    const errors = [];
+    for (const file of files) {
+      if (file.size > 3000000) { errors.push(`${file.name}: file is too big`); continue; }
+      const r = splitLessons(await file.text());
+      errors.push(...r.errors.map((x) => `${file.name}: ${x}`));
+      for (const l of r.lessons) {
+        const p = parseStudy(l.content);
+        lessons.push({ ...l, file: file.name, cards: p.cards.length, qs: p.questions.length, problem: p.errors[0] || (!p.cards.length ? 'No cards' : '') });
+      }
+    }
+    setBulk({ lessons, errors });
+    setBulkLog(null);
+  }
+
+  async function runBulk() {
+    setBulkBusy(true);
+    setErr('');
+    const log = { added: 0, skipped: 0, failed: 0, lessonIds: [], subjectIds: [], notes: [] };
+    for (let i = 0; i < bulk.lessons.length; i += 10) {
+      const chunk = bulk.lessons.slice(i, i + 10).map(({ exam, subject, topic, title, content }) => ({ exam, subject, topic, title, content }));
+      const res = await fetch('/api/admin/study', { method: 'POST', headers, body: JSON.stringify({ action: 'bulk', published: !bulkHidden, lessons: chunk }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { log.notes.push(data.error || 'A batch could not be saved. Run the import again to continue, lessons already added are skipped.'); break; }
+      for (const r of data.results || []) {
+        if (r.status === 'added') { log.added += 1; log.lessonIds.push(r.id); }
+        else if (r.status === 'skipped') log.skipped += 1;
+        else { log.failed += 1; log.notes.push(`${r.topic}, ${r.title}: ${r.message}`); }
+      }
+      for (const id of data.subjectIds || []) if (!log.subjectIds.includes(id)) log.subjectIds.push(id);
+    }
+    setBulkBusy(false);
+    setBulkLog(log);
+    if (!log.failed && !log.notes.length) setBulk({ lessons: [], errors: [] });
+    await load();
+  }
+
+  async function showImported() {
+    if (!bulkLog) return;
+    const ok = await call('POST', { action: 'show', lessonIds: bulkLog.lessonIds, subjectIds: bulkLog.subjectIds }, 'Lessons are now visible to students');
+    if (ok) setBulkLog({ ...bulkLog, shown: true });
+  }
 
   async function load() {
     const res = await fetch('/api/admin/study', { headers });
@@ -193,6 +245,60 @@ export default function AdminStudy({ pw, flash, mode, onMode }) {
         <span className="muted small">{subjects.reduce((n, x) => n + x.topics.reduce((m, t) => m + t.subtopics.length, 0), 0)} lessons</span>
         <button type="button" className="btn sm" onClick={() => { setF({ ...EMPTY }); onMode('form'); }}>New lesson</button>
       </div>
+
+      <section className="card stack tight">
+        <strong>Bulk import</strong>
+        <p className="hint">Choose one or more lesson files. Each lesson in them starts with an === LESSON === line. Everything is checked here first, and nothing is saved until you press Import. Lessons already in a topic are skipped, so importing the same file twice is safe.</p>
+        <label className="btn sm ghost" style={{ justifySelf: 'start' }}>
+          Choose files
+          <input type="file" accept=".txt,text/plain" multiple hidden onChange={chooseFiles} />
+        </label>
+
+        {bulk.errors.map((x, i) => <p key={i} className="error small">{x}</p>)}
+        {bulk.lessons.length > 0 && (() => {
+          const bad = bulk.lessons.filter((l) => l.problem);
+          const topics = new Set(bulk.lessons.map((l) => `${l.subject}|${l.topic}`)).size;
+          return (
+            <>
+              <p className={bad.length ? 'error small' : 'hint'}>
+                {bulk.lessons.length} lessons in {topics} topics, {bulk.lessons.reduce((n, l) => n + l.cards, 0)} cards, {bulk.lessons.reduce((n, l) => n + l.qs, 0)} questions.
+                {bad.length ? ` ${bad.length} need fixing before you can import.` : ''}
+              </p>
+              {bad.slice(0, 8).map((l, i) => <p key={i} className="error small">{l.topic}, {l.title}: {l.problem}</p>)}
+              <details>
+                <summary>See the lessons</summary>
+                <div className="stack tight" style={{ paddingTop: 8 }}>
+                  {bulk.lessons.map((l, i) => (
+                    <p key={i} className="small" style={{ margin: 0 }}>{l.topic}: {l.title} <span className="muted">{l.cards} cards, {l.qs} questions</span></p>
+                  ))}
+                </div>
+              </details>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <input type="checkbox" checked={bulkHidden} onChange={(e) => setBulkHidden(e.target.checked)} style={{ width: 'auto', marginTop: 4 }} />
+                <span>Save as hidden <span className="hint" style={{ display: 'block' }}>Students will not see them until you press Show. Recommended, so you can read them first.</span></span>
+              </label>
+              <div className="row">
+                <button type="button" className="btn" disabled={bulkBusy || bad.length > 0} onClick={runBulk}>{bulkBusy ? 'Importing...' : `Import ${bulk.lessons.length} lessons`}</button>
+                <button type="button" className="btn ghost" disabled={bulkBusy} onClick={() => setBulk({ lessons: [], errors: [] })}>Clear</button>
+              </div>
+            </>
+          );
+        })()}
+
+        {bulkLog && (
+          <div className="stack tight">
+            <p className="hint">Added {bulkLog.added}. Skipped {bulkLog.skipped} that were already there. {bulkLog.failed ? `${bulkLog.failed} could not be saved.` : ''}</p>
+            {bulkLog.notes.slice(0, 8).map((x, i) => <p key={i} className="error small">{x}</p>)}
+            {bulkLog.added > 0 && bulkHidden && !bulkLog.shown && (
+              <div className="row">
+                <button type="button" className="btn sm" disabled={busy} onClick={showImported}>Show these {bulkLog.added} lessons to students</button>
+              </div>
+            )}
+            {bulkLog.shown && <p className="hint">They are now visible to students.</p>}
+          </div>
+        )}
+        {err && <p className="error">{err}</p>}
+      </section>
 
       {loaded && !hasChem && (
         <section className="card stack tight">

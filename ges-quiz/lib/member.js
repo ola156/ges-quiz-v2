@@ -2,10 +2,13 @@ import { db } from './supabase';
 
 export const TRACKS = {
   jamb: 'JAMB',
-  waec: 'WAEC',
+  waec: 'JAMB', // WAEC content is the same as JAMB, so students only ever see JAMB
   post_utme: 'Post-UTME',
   university: 'University',
 };
+// WAEC and JAMB share their content. Everything in the app treats a WAEC record as JAMB.
+export const normTrack = (t) => (t === 'waec' ? 'jamb' : t || 'university');
+
 export const NEEDS_SCHOOL = new Set(['post_utme', 'university']);
 export const CLASS_LEVELS = ['100', '200', '300', '400', '500', '600'];
 
@@ -14,8 +17,14 @@ const MEMBER_COLS = 'clerk_id, role, email, display_name, track, school, departm
 export async function getMember(clerkId) {
   if (!clerkId) return null;
   const { data } = await db().from('members').select(MEMBER_COLS).eq('clerk_id', clerkId).maybeSingle();
-  return data || null;
+  if (!data) return null;
+  if (data.track) data.track = normTrack(data.track);
+  if (Array.isArray(data.tracks)) data.tracks = [...new Set(data.tracks.map(normTrack))];
+  return data;
 }
+
+// True when the person has given us a name. Students who signed up by email code before names were required may not have one.
+export const hasName = (member) => Boolean(member?.display_name && member.display_name.trim());
 
 export async function getTutorAccount(clerkId) {
   if (!clerkId) return null;

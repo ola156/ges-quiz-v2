@@ -2,8 +2,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { SCHOOLS } from '../lib/schools';
 
-const TRACKS = [['jamb', 'JAMB'], ['waec', 'WAEC'], ['post_utme', 'Post-UTME'], ['university', 'University']];
-const trackName = (t) => TRACKS.find(([k]) => k === t)?.[1] || t;
+const TRACKS = [['jamb', 'JAMB'], ['post_utme', 'Post-UTME'], ['university', 'University']];
+const trackName = (t) => (t === 'waec' ? 'JAMB' : TRACKS.find(([k]) => k === t)?.[1] || t);
 const schoolShort = (id) => SCHOOLS.find((s) => s.id === id)?.short || id;
 const day = (iso) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 

@@ -61,6 +61,18 @@ export default function AdminReaders({ pw }) {
           </section>
 
           <section className="card stack tight">
+            <h2 className="sec-title">Subject votes</h2>
+            <p className="hint">What JAMB students want built next, one vote per student per subject, up to 3 each.</p>
+            {!data.votes?.length && <p className="muted small">No votes yet.</p>}
+            {(data.votes || []).map((v, i) => (
+              <div key={i} className="tutor-row">
+                <strong style={{ textTransform: 'capitalize' }}>{v.subject}</strong>
+                <span className="chip">{v.votes} vote{v.votes === 1 ? '' : 's'}</span>
+              </div>
+            ))}
+          </section>
+
+          <section className="card stack tight">
             <h2 className="sec-title">Courses being read</h2>
             {!data.subjects.length && <p className="muted small">Nobody has studied in this period.</p>}
             {data.subjects.map((s, i) => (

@@ -24,7 +24,7 @@ export async function GET(req) {
     .eq('role', 'student')
     .order('created_at', { ascending: false })
     .range(page * PAGE, page * PAGE + PAGE - 1);
-  if (TRACKS[track]) query = query.eq('track', track);
+  if (TRACKS[track]) query = track === 'jamb' ? query.in('track', ['jamb', 'waec']) : query.eq('track', track);
   if (q) query = query.or(`display_name.ilike.%${q}%,email.ilike.%${q}%`);
 
   const { data, count, error } = await query;

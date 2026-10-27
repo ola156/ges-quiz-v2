@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import { getMember, TRACKS } from '../../lib/member';
 import MathText from '../../components/MathText';
+import VoteList from '../../components/VoteList';
+import { db } from '../../lib/supabase';
+import { JAMB_SUBJECTS, subjectKey } from '../../lib/jambsubjects';
 import { flatten, getProgress, isDone, listSubjects } from '../../lib/study';
 
 export const dynamic = 'force-dynamic';
@@ -18,13 +21,22 @@ export default async function StudyHome() {
   const track = member.track;
   const subjects = await listSubjects(track, member.school);
   const progress = await getProgress(userId);
+  // JAMB students vote for the subject they want built next. Subjects already live are left out.
+  let voteSubjects = [];
+  let myVotes = [];
+  if (track === 'jamb') {
+    const live = new Set(subjects.map((s) => subjectKey(s.name)));
+    voteSubjects = JAMB_SUBJECTS.map((name) => ({ key: subjectKey(name), name })).filter((s) => !live.has(s.key));
+    const { data } = await db().from('subject_votes').select('subject').eq('clerk_id', userId);
+    myVotes = (data || []).map((v) => v.subject);
+  }
   const number = String(process.env.NEXT_PUBLIC_CONTACT_WHATSAPP || '').replace(/\D/g, '');
   const text = `Hello, I would like to request a course on Instrict Quizmate study: `;
   const wa = number ? `https://wa.me/${number}?text=${encodeURIComponent(text)}` : '';
 
   return (
     <div className="stack">
-        <h1>Study {TRACKS[track] || ''}</h1>
+        <h1>{TRACKS[track] || ''} {track === 'university' ? 'Courses' : 'Subjects'}</h1>
         {!subjects.length ? (
           <section className="card stack tight">
             <h2 className="card-h">{TRACKS[track] || 'Your exam'} study is being prepared</h2>
@@ -54,8 +66,10 @@ export default async function StudyHome() {
           </ol>
         )}
 
+        {voteSubjects.length > 0 && <VoteList subjects={voteSubjects} mine={myVotes} />}
+
         <section className="card stack tight">
-          <h2 className="card-h">Want your course added?</h2>
+          <h2 className="card-h">{track === 'university' ? 'Want your course added?' : 'Can\'t find the subject you want?'}</h2>
           <p className="muted small">Tell us the course or subject you want to study here and we will work on adding it.</p>
           {wa ? <a className="btn ghost" href={wa} target="_blank" rel="noreferrer">Reach out on WhatsApp</a> : <p className="small">Message us and ask for your course.</p>}
         </section>

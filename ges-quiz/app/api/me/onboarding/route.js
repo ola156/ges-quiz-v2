@@ -33,6 +33,7 @@ export async function POST(req) {
       if (cur?.school !== school) return bad('Pick your school from the list.');
     }
     row.track = track;
+    row.display_name = cleanText(body.displayName, 80); // what they typed; filled from Clerk below if empty
     row.school = NEEDS_SCHOOL.has(track) ? school : null;
     row.department = track === 'university' ? cleanText(body.department, 80) : null;
     row.class_level = track === 'university' && CLASS_LEVELS.includes(String(body.classLevel)) ? String(body.classLevel) : null;
@@ -67,8 +68,15 @@ export async function POST(req) {
   try {
     const user = await currentUser();
     row.email = user?.primaryEmailAddress?.emailAddress?.slice(0, 200) || null;
-    if (role === 'student') row.display_name = cleanText(user?.firstName, 80);
+    if (role === 'student' && !row.display_name) row.display_name = cleanText(user?.fullName || user?.firstName, 80);
   } catch {}
+
+  // A student must have a name. Keep the one already saved if nothing new came in.
+  if (role === 'student' && !row.display_name) {
+    const { data: cur } = await db().from('members').select('display_name').eq('clerk_id', userId).maybeSingle();
+    if (cur?.display_name?.trim()) row.display_name = cur.display_name;
+    else return bad('Enter your name.');
+  }
 
   const supabase = db();
   const { error } = await supabase.from('members').upsert(row, { onConflict: 'clerk_id' });

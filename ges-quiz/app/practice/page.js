@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import PracticeList from '../../components/PracticeList';
-import { getMember, TRACKS } from '../../lib/member';
+import { getMember, normTrack, TRACKS } from '../../lib/member';
 import { getPublishedQuizzes } from '../../lib/data';
 import { schoolName } from '../../lib/schools';
 
@@ -16,7 +16,7 @@ export default async function Practice() {
   const student = member && member.role !== 'tutor' ? member : null;
   const pool = student
     ? all.filter((q) => {
-        if ((q.track || 'university') !== student.track) return false;
+        if (normTrack(q.track) !== student.track) return false;
         return !q.school || q.school === student.school;
       })
     : all;
@@ -31,5 +31,5 @@ export default async function Practice() {
   }));
 
   const label = student ? [TRACKS[student.track], student.school ? schoolName(student.school) : ''].filter(Boolean).join(', ') : '';
-  return <PracticeList items={items} label={label} signedIn={Boolean(member)} track={student?.track || ''} />;
+  return <PracticeList items={items} label={label} signedIn={Boolean(member)} track={student?.track || ''} custom={Boolean(student)} />;
 }

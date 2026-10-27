@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { db } from '../../../../lib/supabase';
 import { isAdmin } from '../../../../lib/admin';
+import { isSchool } from '../../../../lib/schools';
+import { NEEDS_SCHOOL, normTrack, TRACKS } from '../../../../lib/member';
 
 const deny = () => NextResponse.json({ error: 'Wrong password' }, { status: 401 });
 
@@ -44,13 +46,22 @@ export async function GET(req) {
 
 export async function POST(req) {
   if (!(await isAdmin(req))) return deny();
-  const { title, course, description, timeLimit, questions, kind, creatorId, collectionId, allowCalculator } = await req.json();
+  const { title, course, description, timeLimit, questions, kind, creatorId, collectionId, allowCalculator, track, school } = await req.json();
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   if (!Array.isArray(questions) || !questions.length)
     return NextResponse.json({ error: 'No questions to save' }, { status: 400 });
 
   const isPrivate = kind === 'private';
   const supabase = db();
+
+  // A public quiz is filed under an exam (and a school for university and Post-UTME), so it reaches
+  // the right students on their Practice page. A quiz with no exam is treated as university.
+  const examTrack = !isPrivate && TRACKS[track] ? normTrack(track) : null;
+  let examSchool = null;
+  if (examTrack && NEEDS_SCHOOL.has(examTrack) && school) {
+    if (!isSchool(school)) return NextResponse.json({ error: 'Pick a valid school' }, { status: 400 });
+    examSchool = school;
+  }
 
   // A set can join a collection only if it is private, and the collection must exist.
   let collection = null;
@@ -68,6 +79,8 @@ export async function POST(req) {
     // A private set never joins a course, so its scores can never reach a public leaderboard.
     course: isPrivate ? null : course?.trim() || null,
     listed: !isPrivate,
+    track: examTrack,
+    school: examSchool,
     // In a collection, the creator card comes from the collection itself.
     creator_id: isPrivate && !collection && creatorId ? creatorId : null,
     collection_id: collection ? collection.id : null,

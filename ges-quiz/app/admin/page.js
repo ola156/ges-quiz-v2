@@ -8,6 +8,7 @@ import AdminStudents from '../../components/AdminStudents';
 import AdminReaders from '../../components/AdminReaders';
 import NavFrame from '../../components/NavFrame';
 import ThemeToggle from '../../components/ThemeToggle';
+import { SCHOOLS } from '../../lib/schools';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 // Added to the AI prompt so powers, fractions and chemical formulas come out in a form the site can draw.
@@ -67,6 +68,8 @@ export default function Admin() {
   const [creatorId, setCreatorId] = useState('');
   const [collectionId, setCollectionId] = useState('');
   const [allowCalc, setAllowCalc] = useState(false);
+  const [examTrack, setExamTrack] = useState('university'); // who a public quiz is for
+  const [examSchool, setExamSchool] = useState(''); // empty means every school
   const [images, setImages] = useState({}); // question number -> image address
   const [uploading, setUploading] = useState(null);
   const [newCreator, setNewCreator] = useState(EMPTY_CREATOR);
@@ -290,6 +293,8 @@ export default function Admin() {
         kind,
         collectionId: isPrivate ? collectionId : '',
         allowCalculator: allowCalc,
+        track: isPrivate ? '' : examTrack,
+        school: isPrivate || !['university', 'post_utme'].includes(examTrack) ? '' : examSchool,
         creatorId: isPrivate && !collectionId ? creatorId : '',
         title: form.title, course: isPrivate ? '' : form.course, description: form.description,
         timeLimit: form.timeLimit,
@@ -651,7 +656,7 @@ export default function Admin() {
               {waiting.slice(0, 5).map((t) => (
                 <div key={t.id} className="tutor-row">
                   <div>
-                    <strong>{t.name || 'Unnamed tutor'}</strong>
+                    <strong>{t.name || t.email || 'Unnamed tutor'}</strong>
                     <p className="muted small">{t.freeUsed ? 'Free session used, waiting for you' : 'Free session available'}</p>
                   </div>
                   <button type="button" className="btn sm" onClick={() => setTutorActive(t, true)}>Activate</button>
@@ -750,8 +755,31 @@ export default function Admin() {
             </label>
 
             {!isPrivate && (
+              <div className="subcard stack tight">
+                <div className="grid2">
+                  <label>Who is it for
+                    <select value={examTrack} onChange={(e) => { setExamTrack(e.target.value); setExamSchool(''); }}>
+                      <option value="jamb">JAMB</option>
+                      <option value="post_utme">Post-UTME</option>
+                      <option value="university">University</option>
+                    </select>
+                  </label>
+                  {['university', 'post_utme'].includes(examTrack) && (
+                    <label>School
+                      <select value={examSchool} onChange={(e) => setExamSchool(e.target.value)}>
+                        <option value="">All schools</option>
+                        {SCHOOLS.map((s) => <option key={s.id} value={s.id}>{s.short || s.name}</option>)}
+                      </select>
+                    </label>
+                  )}
+                </div>
+                <span className="hint">Students see this quiz on their Practice page only if it matches the exam they chose when they signed up.</span>
+              </div>
+            )}
+
+            {!isPrivate && (
               <label>Course
-                <input value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} placeholder="GES 101" />
+                <input value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} placeholder={examTrack === 'jamb' ? 'Chemistry' : 'GES 101'} />
                 <span className="hint">Sets with the same course name share one overall leaderboard.</span>
               </label>
             )}
@@ -989,7 +1017,7 @@ export default function Admin() {
             <section key={t.id} className="card stack tight">
               <div className="tutor-row">
                 <div>
-                  <strong>{t.name || 'Unnamed tutor'}</strong>
+                  <strong>{t.name || t.email || 'Unnamed tutor'}</strong>
                   <p className="muted small">{[t.email, t.centre].filter(Boolean).join(', ')}</p>
                   <p className="muted small">{t.active ? 'Active' : t.freeUsed ? 'Free session used' : 'Free session available'}</p>
                 </div>

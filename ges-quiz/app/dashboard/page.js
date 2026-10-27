@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import CodeBox from '../../components/CodeBox';
 import MathText from '../../components/MathText';
-import { getMember, getTutorAccount, tutorStatus, tutorReady, TRACKS } from '../../lib/member';
+import { getMember, getTutorAccount, tutorStatus, tutorReady, hasName, TRACKS } from '../../lib/member';
 import { schoolName } from '../../lib/schools';
 import { listSubjects, getProgress, flatten, isDone, statusText } from '../../lib/study';
 import { db } from '../../lib/supabase';
@@ -17,6 +17,8 @@ export default async function Dashboard() {
   if (!userId) redirect('/sign-in');
   const member = await getMember(userId);
   if (!member) redirect('/onboarding');
+  // Students who signed up by email code before names were required are asked once.
+  if (member.role !== 'tutor' && !hasName(member)) redirect('/onboarding?edit=1');
 
   return (
     <div className="stack">
@@ -90,7 +92,7 @@ async function StudentView({ member, userId }) {
     <>
       <header className="dh-head">
         <h1>{member.display_name ? `Welcome, ${member.display_name}` : 'Welcome'}</h1>
-        <p className="muted"> {track === 'university' ? 'Preparing for' : 'Enrolled At'} {detail ? `: ${detail}` : ''}</p>
+        <p className="muted"> {track === 'university' ? 'Preparing for' : 'Learning never ends'} {detail ? `: ${detail}` : ''}</p>
       </header>
 
       {subjects.length > 0 ? (
